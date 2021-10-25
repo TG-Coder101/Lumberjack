@@ -36,18 +36,18 @@ import logging
 def titleArt():
 
     print(r"""
-    __                    __              _            __  
-   / /   __  ______ ___  / /_  ___  _____(_)___  _____/ /__             
-  / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
- / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<   
-/_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|  
-            __.                    /___/                                                                 
-   ________/o |)
-  {_______{_rs|               
+        __                    __              _            __  
+       / /   __  ______ ___  / /_  ___  _____(_)___  _____/ /__             
+      / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
+     / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<   
+    /_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|  
+                __.                    /___/                                                                 
+       ________/o |)
+      {_______{_rs|               
 
-An Active Directory vulnerability identification, exploitation, & reporting tool 
+    An Active Directory vulnerability identification, exploitation, & reporting tool 
     """ )
-    print ("Version ",__version__)
+    print ("    Version ",__version__)
 
 titleArt()
 
