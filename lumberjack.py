@@ -1,4 +1,4 @@
-##!/usr/bin/python3
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 try:
@@ -6,20 +6,25 @@ try:
     import argparse
     import logging
     import os
+    import re
     import subprocess
     import sys 
+    import textwrap
 
     #other imports
-    import ldap3 
+    import ldap3
     import click
     import pypsrp  
-    import ssl
     import pyfiglet
+    import ssl
+    import warnings
     from flask import json
-    from termcolor import colored, cprint
     from pyfiglet import Figlet
     from pprint import pprint
-    from ldap3 import Server, Connection, SUBTREE, ALL, LEVEL, ALL_ATTRIBUTES, Tls, MODIFY_REPLACE
+    from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute
+    from time import sleep
+    from rich.console import Console 
+    from rich.console import Theme
     print ("Modules imported")
 except Exception as e:
     print ("Error {}".format(e))
@@ -27,36 +32,128 @@ except Exception as e:
 """
 lumberjack.py
 """
+
 __version__ = "0.0.1"
 
-OBJECT_CLASS = ['top', 'person', 'organizationalPerson', 'user']
-LDAP_BASE_DN = 'OU=Test Accounts,OU=User Accounts,OU=Accounts,DC=test,DC=core,DC=bogus,DC=org,DC=UK'
-search_filter = "(displayName={0}*)"
-tls_configuration = Tls(validate=ssl.CERT_NONE, version=ssl.PROTOCOL_TLSv1)
+custom_theme = Theme({"success": "blue", "error": "red"})
+console = Console(theme=custom_theme)
+LDAP_BASE_DN = 'OU=Test Accounts,OU=User Accounts,OU=Accounts,DC=hacklab,DC=local'    
+class EnumerateAD:
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--server", help="server name", action="store_true")
-    parser.add_argument("-u", "--user", help="username", action="store_true")
-    parser.add_argument("-p", "--password", help="password", action="store_true")
-    parser.add_argument("-P", "--port", help="port", action="store_true")
-    return parser.parse_args()
+    def __init__(self, domainController, port, ldap, no_credentials, verbose, username=None, password=None):
+        self.dc = domainController
+        self.dUser = username
+        self.ldap = ldap
+        self.dPassword = password
+        self.port = port
+        self.noCreds = no_credentials
+        self.verbose = verbose
 
-args = parse_args()
+    #Connect to domain
+    def connect(self):
+        
+        with console.status("[bold blue]Connecting to Active Directory...") as status: 
+            #Connect through LDAP (Secure)
+            if self.ldap:    
+                self.server = Server(self.dc, self.port, use_ssl=True, get_info=ALL)
+                self.conn = Connection(self.server, self.dUser, self.dPassword, auto_bind=True, fast_decoder=True)
+                self.conn.bind()
+                self.conn.start_tls()
+                sleep(1)
+                console.print("Connected to Active Directory through LDAP", style = "success")
+            #Connect without credentials
+            elif self.noCreds:
+                self.server = Server(self.dc, self.port, use_ssl=True, get_info=ALL)
+                self.conn = Connection(self.server, auto_bind=True, fast_decoder=True)
+                self.conn.bind()
+                self.conn.start_tls()
+                sleep(1)
+                console.print("Connected to Active Directory", style = "success")
+            else :
+                sleep(1)
+                console.print ("[Error] Failed to connect", style = "error")
+                sys.exit(1)
 
-def titleArt():
+"""
+    def ad_search_by_common_name(self, rd_AD_CommonName):
 
-    f = Figlet(font="slant")
-    cprint(colored(f.renderText('RPi Thermometer'), 'cyan'))
+        adFilter = "(&(objectclass=user)(cn=" + rd_AD_CommonName  + "*))"
+        #Search AD
+        self.conn.search(search_filter=adFilter, search_scope=SUBTREE, attributes = ["objectGuid", "krbLastPwdChange" "sAMAccountName", "displayName","userPrincipalName","givenName","sn","mail"], size_limit=0)
 
-    print(r"""   __.                                                                                     
-       ________/o |)                             By Tom Gardner
-      {_______{_rs|  					
+        print(self.conn.entries)
+
+        #Unbind connection to AD
+        self.conn.unbind()
+"""
+
+def main():
+    parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
+                    __                    __              _            __  
+                   / /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
+                  / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
+                 / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<   
+                /_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|  
+                                                   /___/ 
+                          __.                                   By Tom Gardner            
+                 ________/o |)                                 
+                {_______{_rs|  					
     
-    An Active Directory vulnerability identification, exploitation, & reporting tool 
+       A Prototype Active Directory Vulnerability Identification, Exploitation, & Reporting Tool                                    
+    |*------------------------------------------------------------------------------------------*|
+    '''))    
 
-    """ )
-    print ("    	Version ",__version__)
+    #Required arguments
+    required = parser.add_argument_group('Required Arguments')
+    required.add_argument('dc', '--domain', type=str, help='Hostname of the Domain Controller')
+    required.add_argument('-l', '--ldap', help='Connect to domain through LDAP', action='store_true')
+    required.add_argument('-u', '--username', type=str, help='Username of the domain user you want to query. The username format has to be `user@domain.org`')
+    required.add_argument('--a', '--all', help='Run all checks', action='store_true')
+    required.add_argument('--n', '--no-credentials', help='Run without credentials', action='store_true')
+    required.add_argument('--pw', '--password', type=str ,help='Password of the domain user')
+    required.add_argument('--p', '--port', help='Add port', action='store_true')
+    required.add_argument('--No-Creds', '--No-Credentials', help='Connect without credentials', action='store_true')
+    
+    #Optional arguments
+    optional = parser.add_argument_group('Optional Arguments')
+    optional.add_argument('--V', '--verbose', action='store_true')
+    optional.add_argument('--h', '--help', help='show this help message and exit', action='help')
+
+    args = required.parse_args() & optional.parse_args()
+
+    #if invalid arguments
+    if not vars(args):
+        parser.print_help()
+        parser.exit(1)
+    
+    # If theres more than 4 sub'ed (test.test.domain.local) or invalid username format
+    domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
+    userRE = re.compile(r'^([a-zA-Z0-9-\.]+@(?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
+
+    domainMatch = domainRE.findall(args.dc)
+    userMatch = userRE.findall(args.user)
+
+    #if invalid domain name and username format
+    if not domainMatch:
+        console.print("[Error] Domain flag has to be in the format 'hacklab.local'")
+        sys.exit(1)
+    elif args.no_credentials:
+        args.username = False
+    else:
+        if not userMatch:
+            console.print("[Error] User flag has to be in the form 'user@domain.local'", style = "error")
+            sys.exit(1)    
+ 
+    print('')
+
+if __name__ == "__main__":
+    main()
+
+
+
+"""
+
+
 
 def find_ad_users(username):
     with ldap_connection() as c:
@@ -98,18 +195,17 @@ def get_groups():
     return [
          ('CN=ROLE_A%s' % postfix)
     ]
-
 def main():
     credentials = input("Do you have user credentials? Yes or No?:")
     if credentials == 'yes':
         ldap_connection()
-        print(r"""   
+        print(r   
                     Options: 
                     Get Users
                     Get Groups
                     Get Attributes
                     Get Domain    
-        """ )
+         )
         selection = input("What information do you want?:")
         if selection == 'Get Users':
             find_ad_users()
@@ -128,3 +224,5 @@ if __name__ == "__main__":
     titleArt()
     parse_args()
     main()
+
+"""
