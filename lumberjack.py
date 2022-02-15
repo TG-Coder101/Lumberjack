@@ -38,6 +38,7 @@ __version__ = "0.0.1"
 custom_theme = Theme({"success": "blue", "error": "red"})
 console = Console(theme=custom_theme)
 LDAP_BASE_DN = 'OU=Test Accounts,OU=User Accounts,OU=Accounts,DC=hacklab,DC=local'    
+
 class EnumerateAD:
 
     def __init__(self, domainController, port, ldap, no_credentials, verbose, username=None, password=None):
