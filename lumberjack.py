@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-
 try:
     #module imports
     import argparse
@@ -10,6 +9,7 @@ try:
     import subprocess
     import sys 
     import textwrap
+    import datetime
 
     #other imports
     import ldap3
@@ -18,13 +18,19 @@ try:
     import pyfiglet
     import ssl
     import warnings
+    import yaml
+    try:
+        from yaml import CDumper as Dumper
+    except ImportError:
+        from yaml import Dumper
     from flask import json
     from pyfiglet import Figlet
     from pprint import pprint
-    from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute
+    from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute, LDAPBindError
     from time import sleep
     from rich.console import Console 
     from rich.console import Theme
+    
     print ("Modules imported")
 except Exception as e:
     print ("Error {}".format(e))
@@ -33,60 +39,70 @@ except Exception as e:
 lumberjack.py
 """
 
-custom_theme = Theme({"success": "blue", "error": "red"})
-console = Console(theme=custom_theme)
-LDAP_BASE_DN = 'OU=Admin,OU=User Accounts,OU=Accounts,DC=hacklab,DC=local'    
+__version__ = "0.0.1"
 
+custom_theme = Theme({"success": "blue", "error": "red", "warning": "yellow"})
+console = Console(theme=custom_theme)
+LDAP_BASE_DN = 'OU=Test Accounts,OU=User Accounts,OU=Accounts,DC=hacklab,DC=local'
+SEARCH_FILTER = '(objectCategory=person)'    
 class EnumerateAD:
 
-    def __init__(self, domainController, port, ldap, no_credentials, verbose, username=None, password=None):
+    def __init__(self, domainController, port, ldaps, ldap, no_credentials, verbose, username=None, password=None):
         self.dc = domainController
         self.dUser = username
+        self.ldaps = ldaps
         self.ldap = ldap
         self.dPassword = password
         self.port = port
         self.noCreds = no_credentials
         self.verbose = verbose
+        self.attributes = ["*"]
 
     #Connect to domain
     def connect(self):
-        
-        with console.status("[bold blue]Connecting to Active Directory...") as status: 
-            #Connect through LDAP (Secure)
-            if self.ldap:    
-                self.server = Server(self.dc, self.port, use_ssl=True, get_info=ALL)
-                self.conn = Connection(self.server, self.dUser, self.dPassword, auto_bind=True, fast_decoder=True)
-                self.conn.bind()
-                self.conn.start_tls()
-                sleep(1)
-                console.print("Connected to Active Directory through LDAP", style = "success")
-            #Connect without credentials
-            elif self.noCreds:
-                self.server = Server(self.dc, self.port, use_ssl=True, get_info=ALL)
-                self.conn = Connection(self.server, auto_bind=True, fast_decoder=True)
-                self.conn.bind()
-                self.conn.start_tls()
-                sleep(1)
-                console.print("Connected to Active Directory", style = "success")
-            else :
-                sleep(1)
-                console.print ("[Error] Failed to connect", style = "error")
-                sys.exit(1)
+            
+        try:   
+            with console.status("[bold blue]Connecting to Active Directory...") as status: 
+                #Connect through LDAP (Secure)
+                if self.ldaps:    
+                    self.server = Server(self.dc, self.port, use_ssl=True, get_info=ALL)
+                    self.conn = Connection(self.server, self.dUser, self.dPassword, auto_bind=True, fast_decoder=True)
+                    self.conn.bind()
+                    self.conn.start_tls()
+                    sleep(1)
+                    console.print("Connected to Active Directory through LDAPS", style = "success")
+                #Connect through LDAP
+                elif self.ldap:
+                    self.server = Server(self.dc, get_info=ALL)
+                    self.conn = Connection(self.server, auto_bind=True, fast_decoder=True)
+                    self.conn.bind()
+                    sleep(1)
+                    console.print("Connected to Active Directory through LDAP", style = "success")
+                else :
+                    sleep(1)
+                    console.print ("[Error] Failed to connect", style = "error")
+                    raise LDAPBindError
+        except Exception as e:
+            console.print ("[Error] Failed to connect{}".format(e), style = "error")
+            raise LDAPBindError
 
-"""
-    def ad_search_by_common_name(self, rd_AD_CommonName):
+    def enumerateUsers(self):
+            with console.status("[bold blue]Finding Active Directory Users...") as status:
+                try: 
+                    #Search AD
+                    self.conn.search(search_base=LDAP_BASE_DN, search_filter=SEARCH_FILTER, search_scope=SUBTREE, attributes = self.attributes, size_limit=0)
+                    print(self.conn.entries)
+                    print(self.conn.response)
+                    sleep(1)
+                    console.print("All users found", style = "success")
+                    #Unbind connection to AD
+                    self.conn.unbind()
+                except:
+                    console.print ("[Warning] No Users found", style = "warning")
+                    sys.exit(1)
 
-        adFilter = "(&(objectclass=user)(cn=" + rd_AD_CommonName  + "*))"
-        #Search AD
-        self.conn.search(search_filter=adFilter, search_scope=SUBTREE, attributes = ["objectGuid", "krbLastPwdChange" "sAMAccountName", "displayName","userPrincipalName","givenName","sn","mail"], size_limit=0)
+def arguments():
 
-        print(self.conn.entries)
-
-        #Unbind connection to AD
-        self.conn.unbind()
-"""
-
-def main():
     parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
                     __                    __              _            __  
                    / /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
@@ -105,13 +121,14 @@ def main():
     #Required arguments
     required = parser.add_argument_group('Required Arguments')
     required.add_argument('dc', '--domain', type=str, help='Hostname of the Domain Controller')
-    required.add_argument('-l', '--ldap', help='Connect to domain through LDAP', action='store_true')
+    required.add_argument('-ls', '--ldaps', help='Connect to domain through LDAPS', action='store_true')
     required.add_argument('-u', '--username', type=str, help='Username of the domain user you want to query. The username format has to be `user@domain.org`')
     required.add_argument('--a', '--all', help='Run all checks', action='store_true')
     required.add_argument('--n', '--no-credentials', help='Run without credentials', action='store_true')
     required.add_argument('--pw', '--password', type=str ,help='Password of the domain user')
     required.add_argument('--p', '--port', help='Add port', action='store_true')
     required.add_argument('--No-Creds', '--No-Credentials', help='Connect without credentials', action='store_true')
+    required.add_argument('--l', '--ldap', help='Connect to Active Directory through LDAP', action='store_true')
     
     #Optional arguments
     optional = parser.add_argument_group('Optional Arguments')
@@ -120,11 +137,6 @@ def main():
 
     args = required.parse_args() & optional.parse_args()
 
-    #if invalid arguments
-    if not vars(args):
-        parser.print_help()
-        parser.exit(1)
-    
     # If theres more than 4 sub'ed (test.test.domain.local) or invalid username format
     domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
     userRE = re.compile(r'^([a-zA-Z0-9-\.]+@(?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
@@ -138,35 +150,53 @@ def main():
         sys.exit(1)
     elif args.no_credentials:
         args.username = False
-    else:
+    elif:
         if not userMatch:
             console.print("[Error] User flag has to be in the form 'user@domain.local'", style = "error")
-            sys.exit(1)    
- 
+            sys.exit(1)  
+    elif not vars(args):
+        parser.print_help()
+        parser.exit(1)
+    else:
+        sys.exit(1) 
+
+def main():
+
+
+    try:
+        args = arguments()
+    except Exception as e:
+        print ("Error {}".format(e))
+
+    start_time = datetime.now()
+    try:
+        enumerateAD = EnumerateAD(args)
+        enumerateAD.run()
+    except RuntimeError as e:
+        print ("Error {}".format(e))
+    except KeyboardInterrupt:
+        console.print ("[Warning] Aborting", style = "warning")
+
+    elapsed = datetime.now() - start_time
+    print(f"\nCompleted after {elapsed.total_seconds():.2f} seconds")    #if invalid arguments
+    
+        
     print('')
 
 if __name__ == "__main__":
+    console.status("[bold blue]Starting...")
+    sleep(1)
     main()
 
 
 
 """
 
+    enumerateAD = EnumerateAD(args.dc, args.port, args.ldaps, args.ldap, args.no_credentials, args.verbose, args.username, args.password)
 
 
-def find_ad_users(username):
-    with ldap_connection() as c:
-        c.search(search_base=LDAP_BASE_DN,
-                 search_filter=search_filter.format(username),
-                 search_scope=SUBTREE,
-                 attributes=ALL_ATTRIBUTES,
-                 get_operational_attributes=True)
-
-    return json.loads(c.response_to_json())
-
-def ldap_connection():
-    server = ldap_server()
-    return Connection(server, args.user, args.password, auto_bind=True, fast_decoder=True)
+    if sys.argv:
+        enumerateAD.run() 
 
 def ldap_connection_no_credentials():
     server = ldap_server()
