@@ -162,7 +162,6 @@ def arguments():
 
 def main():
 
-
     try:
         args = arguments()
     except Exception as e:
@@ -179,8 +178,7 @@ def main():
 
     elapsed = datetime.now() - start_time
     print(f"\nCompleted after {elapsed.total_seconds():.2f} seconds")    #if invalid arguments
-    
-        
+      
     print('')
 
 if __name__ == "__main__":
