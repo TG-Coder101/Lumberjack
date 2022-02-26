@@ -108,23 +108,19 @@ def arguments():
     '''))    
 
     #Required arguments
-    required = parser.add_argument_group('Required Arguments')
-    required.add_argument('dc', '--domain', type=str, help='Hostname of the Domain Controller')
-    required.add_argument('-ls', '--ldaps', help='Connect to domain through LDAPS', action='store_true')
-    required.add_argument('-u', '--username', type=str, help='Username of the domain user you want to query. The username format has to be `user@domain.org`')
-    required.add_argument('--a', '--all', help='Run all checks', action='store_true')
-    required.add_argument('--n', '--no-credentials', help='Run without credentials', action='store_true')
-    required.add_argument('--pw', '--password', type=str ,help='Password of the domain user')
-    required.add_argument('--p', '--port', help='Add port', action='store_true')
-    required.add_argument('--No-Creds', '--No-Credentials', help='Connect without credentials', action='store_true')
-    required.add_argument('--l', '--ldap', help='Connect to Active Directory through LDAP', action='store_true')
-    
-    #Optional arguments
-    optional = parser.add_argument_group('Optional Arguments')
-    optional.add_argument('--V', '--verbose', action='store_true')
-    optional.add_argument('--h', '--help', help='show this help message and exit', action='help')
+    parser.add_argument('-dc', '--domain', type=str, help='Hostname of the Domain Controller')
+    parser.add_argument('-ls', '--ldaps', help='Connect to domain through LDAPS', action='store_true')
+    parser.add_argument('-u', '--username', type=str, help='Username of the domain user you want to query. The username format has to be `user@domain.org`')
+    parser.add_argument('-a', '--all', help='Run all checks', action='store_true')
+    parser.add_argument('-n', '--no-credentials', help='Run without credentials', action='store_true')
+    parser.add_argument('-pw', '--password', type=str ,help='Password of the domain user')
+    parser.add_argument('-p', '--port', help='Add port', action='store_true')
+    parser.add_argument('-No-Creds', '--No-Credentials', help='Connect without credentials', action='store_true')
+    parser.add_argument('-l', '--ldap', help='Connect to Active Directory through LDAP', action='store_true')
+    parser.add_argument('--V', '--verbose', action='store_true')
+    parser.add_argument('--h', '--help', help='show this help message and exit', action='help')
 
-    args = required.parse_args() & optional.parse_args()
+    args = parser.parse_args()
 
     # If theres more than 4 sub'ed (test.test.domain.local) or invalid username format
     domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
