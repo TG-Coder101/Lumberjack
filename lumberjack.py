@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+
 try:
     #module imports
     import argparse
@@ -26,7 +27,8 @@ try:
     from flask import json
     from pyfiglet import Figlet
     from pprint import pprint
-    from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute, LDAPBindError
+    from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute
+    from ldap3.core.exceptions import LDAPBindError, LDAPException
     from time import sleep
     from rich.console import Console 
     from rich.console import Theme
@@ -45,6 +47,7 @@ custom_theme = Theme({"success": "blue", "error": "red", "warning": "yellow"})
 console = Console(theme=custom_theme)
 LDAP_BASE_DN = 'OU=Test Accounts,OU=User Accounts,OU=Accounts,DC=hacklab,DC=local'
 SEARCH_FILTER = '(objectCategory=person)'    
+#SEARCH_FILTER = '(uidNumber=500)' (objectclass=computer)
 class EnumerateAD:
 
     def __init__(self, domainController, port, ldaps, ldap, no_credentials, verbose, username=None, password=None):
@@ -91,14 +94,15 @@ class EnumerateAD:
                 try: 
                     #Search AD
                     self.conn.search(search_base=LDAP_BASE_DN, search_filter=SEARCH_FILTER, search_scope=SUBTREE, attributes = self.attributes, size_limit=0)
+                    console.print("All users found", style = "success")
                     print(self.conn.entries)
                     print(self.conn.response)
                     sleep(1)
-                    console.print("All users found", style = "success")
                     #Unbind connection to AD
                     self.conn.unbind()
-                except:
+                except LDAPException as e:
                     console.print ("[Warning] No Users found", style = "warning")
+                    print ("Error {}".format(e))
                     sys.exit(1)
 
 def arguments():
@@ -150,8 +154,7 @@ def arguments():
         sys.exit(1)
     elif args.no_credentials:
         args.username = False
-    elif:
-        if not userMatch:
+    elif not userMatch:
             console.print("[Error] User flag has to be in the form 'user@domain.local'", style = "error")
             sys.exit(1)  
     elif not vars(args):
@@ -161,6 +164,7 @@ def arguments():
         sys.exit(1) 
 
 def main():
+
 
     try:
         args = arguments()
@@ -178,7 +182,8 @@ def main():
 
     elapsed = datetime.now() - start_time
     print(f"\nCompleted after {elapsed.total_seconds():.2f} seconds")    #if invalid arguments
-      
+    
+        
     print('')
 
 if __name__ == "__main__":
