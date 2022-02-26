@@ -4,28 +4,14 @@
 try:
     #module imports
     import argparse
-    import logging
     import os
     import re
-    import subprocess
     import sys 
     import textwrap
     import datetime
 
     #other imports
     import ldap3
-    import click
-    import pypsrp  
-    import pyfiglet
-    import ssl
-    import warnings
-    import yaml
-    try:
-        from yaml import CDumper as Dumper
-    except ImportError:
-        from yaml import Dumper
-    from flask import json
-    from pyfiglet import Figlet
     from pprint import pprint
     from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute
     from ldap3.core.exceptions import LDAPBindError, LDAPException
@@ -59,7 +45,6 @@ class EnumerateAD:
         self.port = port
         self.noCreds = no_credentials
         self.verbose = verbose
-        self.attributes = ["*"]
 
     #Connect to domain
     def connect(self):
@@ -93,16 +78,16 @@ class EnumerateAD:
             with console.status("[bold blue]Finding Active Directory Users...") as status:
                 try: 
                     #Search AD
-                    self.conn.search(search_base=LDAP_BASE_DN, search_filter=SEARCH_FILTER, search_scope=SUBTREE, attributes = self.attributes, size_limit=0)
+                    self.conn.search(search_base=LDAP_BASE_DN, search_filter=SEARCH_FILTER, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
                     console.print("All users found", style = "success")
-                    print(self.conn.entries)
-                    print(self.conn.response)
+                    pprint(self.conn.entries)
+                    pprint(self.conn.response)
                     sleep(1)
                     #Unbind connection to AD
                     self.conn.unbind()
                 except LDAPException as e:
                     console.print ("[Warning] No Users found", style = "warning")
-                    print ("Error {}".format(e))
+                    pprint ("Error {}".format(e))
                     sys.exit(1)
 
 def arguments():
@@ -158,30 +143,28 @@ def arguments():
             console.print("[Error] User flag has to be in the form 'user@domain.local'", style = "error")
             sys.exit(1)  
     elif not vars(args):
-        parser.print_help()
+        parser.pprint_help()
         parser.exit(1)
     else:
         sys.exit(1) 
 
 def main():
 
-
     try:
         args = arguments()
     except Exception as e:
-        print ("Error {}".format(e))
-
+        pprint ("Error {}".format(e))
     start_time = datetime.now()
     try:
         enumerateAD = EnumerateAD(args)
         enumerateAD.run()
     except RuntimeError as e:
-        print ("Error {}".format(e))
+        pprint ("Error {}".format(e))
     except KeyboardInterrupt:
         console.print ("[Warning] Aborting", style = "warning")
 
     elapsed = datetime.now() - start_time
-    print(f"\nCompleted after {elapsed.total_seconds():.2f} seconds")    #if invalid arguments
+    pprint(f"\nCompleted after {elapsed.total_seconds():.2f} seconds")   
     
         
     print('')
