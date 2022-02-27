@@ -13,7 +13,7 @@ try:
     	#other imports
     	from datetime import datetime
     	from pprint import pprint
-    	from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute
+    	from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute, ServerPool
     	from ldap3.core.exceptions import LDAPBindError, LDAPException
     	from time import sleep
     	from rich.console import Console
@@ -24,6 +24,7 @@ except Exception as e:
 """
 lumberjack.py
 """
+
 custom_theme = Theme({"success": "blue", "error": "red", "warning": "yellow"})
 console = Console(theme=custom_theme)
 LDAP_BASE_DN = 'OU=Test Accounts,OU=User Accounts,OU=Accounts,DC=hacklab,DC=local'
@@ -33,71 +34,98 @@ USER_NAME = 'CN=Administrator, CN=Users, DC=hacklabtest, DC=local'
 
 class EnumerateAD:
 
-	def __init__(self, domainController, port, ldaps, ldap, no_credentials, status, username, password):
+	def __init__(self, domainController, ldaps, ldap, no_credentials, ip_address, connect, enum, status, username, password):
 		self.dc = domainController
 		self.dUser = username
 		self.ldaps = ldaps
 		self.ldap = ldap
 		self.dPassword = password
-		self.port = port
 		self.noCreds = no_credentials
+		self.dIP = ip_address
 		self.status = status
-
+		self.people = []
+		
+	if enum is not false:	
+		connect()
+		enumerateUsers()
+	#if the user only wants to connect
+	else:
+		connect()
+	
 	#Connect to domain
 	def connect(self):
 		try:
 			self.status.update(status="[bold blue]Connecting to Active Directory...")
 			#Connect through LDAPS (Secure)
 			if self.ldaps:
-				self.server = Server('ldaps://{}'.format(self.dc), self.port, use_ssl=True, get_info=ALL)
-				self.conn = Connection(self.server, USER_NAME, password = self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.server_pool = ServerPool(self.dIP)
+				self.server = Server(self.dc, port=646, use_ssl=True, get_info=ALL)
+				self.server_pool.add(self.server)
+				self.conn = Connection(self.server_pool, user=self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.conn.open()
 				self.conn.bind()
-				self.conn.start_tls()
 				sleep(1)
-				console.print("+[Connected to Active Directory through LDAPS]+", style = "success")
+				console.print("[Success] Connected to Active Directory through LDAPS", style = "success")
+				pprint(conn)
+				pprint(Server)
 			#Connect through LDAP
 			elif self.ldap:
-				self.server = Server('ldap://{}'.format(self.dc), get_info=ALL)
-				self.conn = Connection(self.server, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.server_pool = ServerPool(self.dIP)
+				self.server = Server(self.dc, get_info=ALL)
+				self.server_pool.add(self.server)
+				self.conn = Connection(self.server_pool, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.conn.open()
 				self.conn.bind()
 				sleep(1)
-				console.print("+[Connected to Active Directory through LDAP]+", style = "success")
+				console.print("[Success] Connected to Active Directory through LDAP", style = "success")
+				pprint(conn)
+				pprint(Server)
 			#Connect through LDAPS without Credentials
 			elif self.no_Creds & self.ldaps:
-				self.dUser = " "
-				self.dPassword = " "
-				self.server = Server('ldaps://{}'.format(self.dc), self.port, use_ssl=True, get_info=ALL)
-				self.conn = Connection(self.server, user = self.dUser, password = self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.dUser = ''
+				self.dPassword = ''
+				self.server_pool = ServerPool(self.dIP)
+				self.server = Server(self.dc, port=646, use_ssl=True, get_info=ALL)
+				self.server_pool.add(self.server)
+				self.conn = Connection(self.server_pool, user=self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.conn.open()
 				self.conn.bind()
-				self.conn.start_tls()
 				sleep(1)
-				console.print("+[Connected to Active Directory through LDAPS and without credentials]+", style = "success")
+				console.print("[Success] Connected to Active Directory through LDAPS and without credentials", style = "success")
+				pprint(conn)
+				pprint(Server)
 			#Connect through LDAP without Credentials
 			elif self.no_Creds & self.ldap:
-				self.dUser = " "
-				self.dPassword = " "
-				self.server = Server('ldap://{}'.format(self.dc), get_info=ALL)
-				self.conn = Connection(self.server, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.dUser = ''
+				self.dPassword = ''
+				self.server_pool = ServerPool(self.dIP)
+				self.server = Server(self.dc, get_info=ALL)
+				self.conn = Connection(self.server_pool, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.conn.open()
 				self.conn.bind()
 				sleep(1)
-				console.print("+[Connected to Active Directory through LDAP and without credentials]+", style = "success")                    			
+				console.print("[Success] Connected to Active Directory through LDAP and without credentials", style = "success")    
+				pprint(conn)
+				pprint(Server)                			
 			else :
 				sleep(1)
 				console.print ("[Error] Failed to connect: ", style = "error")
-				raise LDAPBindError
-				
+				raise LDAPBindError	
 		except Exception as e:
 			console.print ("[Error] Failed to connect: {} ".format(e), style = "error")
 			raise LDAPBindError
-
+			
+	#Enumerate Active Directory Users		
 	def enumerateUsers(self):
 		self.status.update("[bold blue]Finding Active Directory Users...")
 		try:
 			#Search AD
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter=SEARCH_FILTER, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
-			console.print("+[All users found]+", style = "success")
-			pprint(self.conn.entries)
+			console.print ("[Success] Got all domain users ", style = "success")
+			pprint(self.conn)
+			pprint(self.server)
 			pprint(self.conn.response)
+			pprint(self.conn.entries)
 			sleep(1)
 			#Unbind connection to AD
 			self.conn.unbind()
@@ -127,12 +155,14 @@ def main():
 	parser.add_argument('-dc', type=str, help='Hostname of the Domain Controller')
 	parser.add_argument('-ls', '--ldaps', help='Connect to domain through LDAPS (Secure)', action='store_true')
 	parser.add_argument('-l', '--ldap', help='Connect to domain through LDAP', action='store_true')
-	parser.add_argument('-u', '--username', type=str, help='Username of the domain user you want to query. The username format has to be `user@domain.org`')
+	parser.add_argument('-u', '--username', type=str, help='Username of domain user. The username format must be `user@domain.org`')
 	parser.add_argument('-n', '--no_credentials', help='Run without credentials', action='store_true')
 	parser.add_argument('-pw', '--password', type=str ,help='Password of the domain user')
-	parser.add_argument('-p', '--port', type=int, help='Add port (Use 389 for ldap, 646 for ldaps)')
 	parser.add_argument('-h', '--help', help='show this help message and exit', action='help')
-
+	parser.add_argument('-ip', '--ip_address', type=int, help='ip address of Active Directory')
+	parser.add_argument('-e', '--enum', help='Enumerate Active Directory Objects', action='store_true')
+	parser.add_argument('-j', '--connect', help='Just connect and nothing else', action='store_true')
+	
 	args = parser.parse_args()
 	
 	#Display help page if no arguments are provided
@@ -140,6 +170,9 @@ def main():
 		console.print("[Warning] No Arguments Provided", style = "warning")
 		parser.print_help()
 		parser.exit(1)
+	elif args.connect:
+		args.enum = False
+		
 		
 	# If theres more than 4 sub'ed (test.test.domain.local) or invalid username format
 	domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
@@ -152,8 +185,6 @@ def main():
 	if not domainMatch:
 		console.print("[Error] Domain flag has to be in the format 'hacklab.local'", style = "error")
 		sys.exit(1)
-	elif args.no_credentials:
-		args.username = False
 	elif not userMatch:
 	    	console.print("[Error] User flag has to be in the form 'user@domain.local'", style = "error")
 	    	sys.exit(1)
@@ -161,7 +192,7 @@ def main():
 	#The clock is running!
 	start_time = datetime.now()
 	try:
-		enumerateAD = EnumerateAD(args.dc, args.port, args.ldaps, args.ldap, args.no_credentials, status, args.username, args.password)
+		enumerateAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.ip_address, args.connect, args.enum, status, args.username, args.password)
 		enumerateAD.connect()
 		enumerateAD.enumerateUsers()
 		
@@ -172,10 +203,11 @@ def main():
 
 	elapsed = datetime.now() - start_time
 	pprint(f"\nCompleted after {elapsed.total_seconds():.2f} seconds")
+	#print blank line
 	pprint('')
 	
 if __name__ == "__main__":
 	with console.status("[bold blue]Starting...") as status:
 		sleep(2)
 		main()
-	console.print("+[Finished]+", style="success")	
+	console.print("[Success] Finished", style="success")	
