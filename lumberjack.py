@@ -43,7 +43,7 @@ class EnumerateAD:
 		self.dIP = ip_address
 		self.status = status
 		self.people = []
-		#self.enumObj = enumObj
+		self.enumObj = enumObj
 		
 	#Connect to domain
 	def connect(self):
