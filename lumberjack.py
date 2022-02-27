@@ -27,14 +27,13 @@ lumberjack.py
 
 custom_theme = Theme({"success": "blue", "error": "red", "warning": "yellow"})
 console = Console(theme=custom_theme)
-LDAP_BASE_DN = 'OU=Test Accounts,OU=User Accounts,OU=Accounts,DC=hacklab,DC=local'
+LDAP_BASE_DN = 'DC=hacklabtest,DC=local'
 SEARCH_FILTER = '(objectCategory=person)'
-#SEARCH_FILTER = '(uidNumber=500)' (objectclass=computer)
 USER_NAME = 'CN=Administrator, CN=Users, DC=hacklabtest, DC=local'
 
 class EnumerateAD:
 
-	def __init__(self, domainController, ldaps, ldap, no_credentials, ip_address, connect, enum, status, username, password):
+	def __init__(self, domainController, ldaps, ldap, no_credentials, ip_address, connect, enumObj, status, username, password):
 		self.dc = domainController
 		self.dUser = username
 		self.ldaps = ldaps
@@ -44,14 +43,8 @@ class EnumerateAD:
 		self.dIP = ip_address
 		self.status = status
 		self.people = []
+		#self.enumObj = enumObj
 		
-	if enum is not false:	
-		connect()
-		enumerateUsers()
-	#if the user only wants to connect
-	else:
-		connect()
-	
 	#Connect to domain
 	def connect(self):
 		try:
@@ -61,12 +54,12 @@ class EnumerateAD:
 				self.server_pool = ServerPool(self.dIP)
 				self.server = Server(self.dc, port=646, use_ssl=True, get_info=ALL)
 				self.server_pool.add(self.server)
-				self.conn = Connection(self.server_pool, user=self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.conn = Connection(self.server_pool, self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
 				self.conn.open()
 				self.conn.bind()
 				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAPS", style = "success")
-				pprint(conn)
+				pprint(self.conn)
 				pprint(Server)
 			#Connect through LDAP
 			elif self.ldap:
@@ -78,7 +71,7 @@ class EnumerateAD:
 				self.conn.bind()
 				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAP", style = "success")
-				pprint(conn)
+				pprint(self.conn)
 				pprint(Server)
 			#Connect through LDAPS without Credentials
 			elif self.no_Creds & self.ldaps:
@@ -92,7 +85,7 @@ class EnumerateAD:
 				self.conn.bind()
 				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAPS and without credentials", style = "success")
-				pprint(conn)
+				pprint(self.conn)
 				pprint(Server)
 			#Connect through LDAP without Credentials
 			elif self.no_Creds & self.ldap:
@@ -105,8 +98,8 @@ class EnumerateAD:
 				self.conn.bind()
 				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAP and without credentials", style = "success")    
-				pprint(conn)
-				pprint(Server)                			
+				pprint(self.conn)
+				pprint(Server)            			
 			else :
 				sleep(1)
 				console.print ("[Error] Failed to connect: ", style = "error")
@@ -158,9 +151,9 @@ def main():
 	parser.add_argument('-n', '--no_credentials', help='Run without credentials', action='store_true')
 	parser.add_argument('-pw', '--password', type=str ,help='Password of the domain user')
 	parser.add_argument('-h', '--help', help='show this help message and exit', action='help')
-	parser.add_argument('-ip', '--ip_address', type=int, help='ip address of Active Directory')
-	parser.add_argument('-e', '--enum', help='Enumerate Active Directory Objects', action='store_true')
-	parser.add_argument('-j', '--connect', help='Just connect and nothing else', action='store_true')
+	parser.add_argument('-ip', '--ip_address', type=str, help='ip address of Active Directory')
+	parser.add_argument('-e', '--enumObj', help='Enumerate Active Directory Objects', action='store_true')
+	parser.add_argument('-c', '--connect', help='Just connect and nothing else', action='store_true')
 	
 	args = parser.parse_args()
 	
@@ -169,32 +162,29 @@ def main():
 		console.print("[Warning] No Arguments Provided", style = "warning")
 		parser.print_help()
 		parser.exit(1)
-	elif args.connect:
-		args.enum = False
+	if args.connect:
+		args.enumObj = False
 		
 		
 	# If theres more than 4 sub'ed (test.test.domain.local) or invalid username format
 	domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
-	userRE = re.compile(r'^([a-zA-Z0-9-\.]+@(?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z0-9-]+)$')
-
 	domainMatch = domainRE.findall(args.dc)
-	userMatch = userRE.findall(args.username)
-	
+
 	#if invalid domain name and username format
 	if not domainMatch:
 		console.print("[Error] Domain flag has to be in the format 'hacklab.local'", style = "error")
 		sys.exit(1)
-	elif not userMatch:
-	    	console.print("[Error] User flag has to be in the form 'user@domain.local'", style = "error")
-	    	sys.exit(1)
 	    	
 	#The clock is running!
 	start_time = datetime.now()
 	try:
-		enumerateAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.ip_address, args.connect, args.enum, status, args.username, args.password)
-		enumerateAD.connect()
-		enumerateAD.enumerateUsers()
-		
+		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.ip_address, args.connect, args.enumObj, status, args.username, args.password)
+		enumAD.connect()
+		if args.enumObj is not False:
+			enumAD.enumerateUsers()
+		else:
+			sys.exit(1)
+
 	except RuntimeError as e:
 		pprint ("Error {}".format(e))
 	except KeyboardInterrupt:
