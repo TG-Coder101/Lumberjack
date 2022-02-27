@@ -124,7 +124,6 @@ class EnumerateAD:
 			console.print ("[Success] Got all domain users ", style = "success")
 			pprint(self.conn)
 			pprint(self.server)
-			pprint(self.conn.response)
 			pprint(self.conn.entries)
 			sleep(1)
 			#Unbind connection to AD
