@@ -9,6 +9,7 @@ try:
     	import textwrap
     	import ldap3
     	import datetime
+    	import pyfiglet
 	
     	#other imports
     	from datetime import datetime
@@ -17,7 +18,9 @@ try:
     	from ldap3.core.exceptions import LDAPBindError, LDAPException
     	from time import sleep
     	from rich.console import Console
+    	from termcolor import colored, cprint
     	from rich.console import Theme
+    	from pyfiglet import Figlet
 except Exception as e:
     	print ("Error {}".format(e))
 
@@ -43,12 +46,12 @@ class EnumerateAD:
 		self.dIP = ip_address
 		self.status = status
 		self.people = []
-		self.enumObj = enumObj
+		#self.enumObj = enumObj
 		
 	#Connect to domain
 	def connect(self):
+		self.status.update(status="[bold white]Connecting to Active Directory...")
 		try:
-			self.status.update(status="[bold blue]Connecting to Active Directory...")
 			#Connect through LDAPS (Secure)
 			if self.ldaps:
 				self.server_pool = ServerPool(self.dIP)
@@ -59,20 +62,16 @@ class EnumerateAD:
 				self.conn.bind()
 				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAPS", style = "success")
-				pprint(self.conn)
-				pprint(Server)
 			#Connect through LDAP
 			elif self.ldap:
 				self.server_pool = ServerPool(self.dIP)
 				self.server = Server(self.dc, get_info=ALL)
 				self.server_pool.add(self.server)
-				self.conn = Connection(self.server_pool, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.conn = Connection(self.server_pool, self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
 				self.conn.open()
 				self.conn.bind()
 				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAP", style = "success")
-				pprint(self.conn)
-				pprint(Server)
 			#Connect through LDAPS without Credentials
 			elif self.no_Creds & self.ldaps:
 				self.dUser = ''
@@ -85,8 +84,6 @@ class EnumerateAD:
 				self.conn.bind()
 				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAPS and without credentials", style = "success")
-				pprint(self.conn)
-				pprint(Server)
 			#Connect through LDAP without Credentials
 			elif self.no_Creds & self.ldap:
 				self.dUser = ''
@@ -97,9 +94,7 @@ class EnumerateAD:
 				self.conn.open()
 				self.conn.bind()
 				sleep(1)
-				console.print("[Success] Connected to Active Directory through LDAP and without credentials", style = "success")    
-				pprint(self.conn)
-				pprint(Server)            			
+				console.print("[Success] Connected to Active Directory through LDAP and without credentials", style = "success")            			
 			else :
 				sleep(1)
 				console.print ("[Error] Failed to connect: ", style = "error")
@@ -110,21 +105,22 @@ class EnumerateAD:
 			
 	#Enumerate Active Directory Users		
 	def enumerateUsers(self):
-		self.status.update("[bold blue]Finding Active Directory Users...")
+		self.status.update("[bold white]Finding Active Directory Users...")
+		sleep(3)
 		try:
 			#Search AD
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter=SEARCH_FILTER, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
 			console.print ("[Success] Got all domain users ", style = "success")
-			pprint(self.conn)
-			pprint(self.server)
 			pprint(self.conn.entries)
-			sleep(1)
 			#Unbind connection to AD
 			self.conn.unbind()
 		except LDAPException as e:
 			console.print ("[Warning] No Users found", style = "warning")
 			pprint ("Error {}".format(e))
 			sys.exit(1)
+def titleArt():
+	f = Figlet(font="slant")
+	cprint(colored(f.renderText('Lumberjack'), 'cyan'))
 
 def main():
 
@@ -189,14 +185,21 @@ def main():
 		pprint ("Error {}".format(e))
 	except KeyboardInterrupt:
 		console.print ("[Warning] Aborting", style = "warning")
-
+		
+	status.update("[bold white]Exiting Lumberjack...")
+	sleep(2)
 	elapsed = datetime.now() - start_time
-	pprint(f"\nCompleted after {elapsed.total_seconds():.2f} seconds")
+	console.print(f"Completed after {elapsed.total_seconds():.2f} seconds", style="warning")
 	#print blank line
 	pprint('')
 	
 if __name__ == "__main__":
-	with console.status("[bold blue]Starting...") as status:
-		sleep(2)
-		main()
-	console.print("[Success] Finished", style="success")	
+	titleArt()
+	with console.status("[bold white]Starting Lumberjack...") as status:
+		try:
+			sleep(2)
+			console.print("[Success] Lumberjack Started", style="success")	
+			main()
+			console.print("[Success] Finished", style="success")	
+		except KeyboardInterrupt:
+			console.print ("[Warning] Aborted", style= "warning")
