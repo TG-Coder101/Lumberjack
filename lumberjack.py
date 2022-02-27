@@ -61,7 +61,7 @@ class EnumerateAD:
 				self.conn.open()
 				self.conn.bind()
 				sleep(1)
-				console.print("[Success] Connected to Active Directory through LDAPS", style = "success")
+				console.print("[Success] Connected to Active Directory through LDAPs", style = "success")
 			#Connect through LDAP
 			elif self.ldap:
 				self.server_pool = ServerPool(self.dIP)
@@ -170,9 +170,14 @@ def main():
 	if not domainMatch:
 		console.print("[Error] Domain flag has to be in the format 'hacklab.local'", style = "error")
 		sys.exit(1)
-	    	
+		
+	titleArt()
+	console.print("[Success] Lumberjack Started", style="success")	
+	
 	#The clock is running!
 	start_time = datetime.now()
+	
+	#Run main features
 	try:
 		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.ip_address, args.connect, args.enumObj, status, args.username, args.password)
 		enumAD.connect()
@@ -190,15 +195,14 @@ def main():
 	sleep(2)
 	elapsed = datetime.now() - start_time
 	console.print(f"Completed after {elapsed.total_seconds():.2f} seconds", style="warning")
+	
 	#print blank line
 	pprint('')
 	
 if __name__ == "__main__":
-	titleArt()
 	with console.status("[bold white]Starting Lumberjack...") as status:
 		try:
 			sleep(2)
-			console.print("[Success] Lumberjack Started", style="success")	
 			main()
 			console.print("[Success] Finished", style="success")	
 		except KeyboardInterrupt:
