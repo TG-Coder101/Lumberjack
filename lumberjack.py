@@ -7,11 +7,11 @@ try:
     	import re
     	import sys
     	import textwrap
-    	import datetime
-    	from datetime import datetime
-
-    	#other imports
     	import ldap3
+    	import datetime
+	
+    	#other imports
+    	from datetime import datetime
     	from pprint import pprint
     	from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute
     	from ldap3.core.exceptions import LDAPBindError, LDAPException
@@ -24,9 +24,6 @@ except Exception as e:
 """
 lumberjack.py
 """
-
-__version__ = "0.0.1"
-
 custom_theme = Theme({"success": "blue", "error": "red", "warning": "yellow"})
 console = Console(theme=custom_theme)
 LDAP_BASE_DN = 'OU=Test Accounts,OU=User Accounts,OU=Accounts,DC=hacklab,DC=local'
@@ -50,9 +47,9 @@ class EnumerateAD:
 	def connect(self):
 		try:
 			self.status.update(status="[bold blue]Connecting to Active Directory...")
-			#Connect through LDAP (Secure)
+			#Connect through LDAPS (Secure)
 			if self.ldaps:
-				self.server = Server('ldap://{}'.format(self.dc), self.port, use_ssl=True, get_info=ALL)
+				self.server = Server('ldaps://{}'.format(self.dc), self.port, use_ssl=True, get_info=ALL)
 				self.conn = Connection(self.server, USER_NAME, password = self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
 				self.conn.bind()
 				self.conn.start_tls()
@@ -65,15 +62,17 @@ class EnumerateAD:
 				self.conn.bind()
 				sleep(1)
 				console.print("+[Connected to Active Directory through LDAP]+", style = "success")
+			#Connect through LDAPS without Credentials
 			elif self.no_Creds & self.ldaps:
 				self.dUser = " "
 				self.dPassword = " "
-				self.server = Server('ldap://{}'.format(self.dc), self.port, use_ssl=True, get_info=ALL)
+				self.server = Server('ldaps://{}'.format(self.dc), self.port, use_ssl=True, get_info=ALL)
 				self.conn = Connection(self.server, user = self.dUser, password = self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
 				self.conn.bind()
 				self.conn.start_tls()
 				sleep(1)
 				console.print("+[Connected to Active Directory through LDAPS and without credentials]+", style = "success")
+			#Connect through LDAP without Credentials
 			elif self.no_Creds & self.ldap:
 				self.dUser = " "
 				self.dPassword = " "
@@ -86,6 +85,7 @@ class EnumerateAD:
 				sleep(1)
 				console.print ("[Error] Failed to connect: ", style = "error")
 				raise LDAPBindError
+				
 		except Exception as e:
 			console.print ("[Error] Failed to connect: {} ".format(e), style = "error")
 			raise LDAPBindError
@@ -95,7 +95,7 @@ class EnumerateAD:
 		try:
 			#Search AD
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter=SEARCH_FILTER, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
-			console.print("All users found", style = "success")
+			console.print("+[All users found]+", style = "success")
 			pprint(self.conn.entries)
 			pprint(self.conn.response)
 			sleep(1)
@@ -115,7 +115,7 @@ def main():
 	         / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<
 	        /_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|
 	                                           /___/
-	                  __.                                   By Tom Gardner
+	                  __.                                   	By Tom Gardner
 	         ________/o |)
 	        {_______{_rs|
 
@@ -135,6 +135,7 @@ def main():
 
 	args = parser.parse_args()
 	
+	#Display help page if no arguments are provided
 	if len(sys.argv) < 2:
 		console.print("[Warning] No Arguments Provided", style = "warning")
 		parser.print_help()
@@ -156,12 +157,13 @@ def main():
 	elif not userMatch:
 	    	console.print("[Error] User flag has to be in the form 'user@domain.local'", style = "error")
 	    	sys.exit(1)
-
+	    	
+	#The clock is running!
 	start_time = datetime.now()
-	
 	try:
 		enumerateAD = EnumerateAD(args.dc, args.port, args.ldaps, args.ldap, args.no_credentials, status, args.username, args.password)
 		enumerateAD.connect()
+		enumerateAD.enumerateUsers()
 		
 	except RuntimeError as e:
 		pprint ("Error {}".format(e))
@@ -176,4 +178,4 @@ if __name__ == "__main__":
 	with console.status("[bold blue]Starting...") as status:
 		sleep(2)
 		main()
-	console.print("Finished", style="success")	
+	console.print("+[Finished]+", style="success")	
