@@ -36,7 +36,7 @@ USER_NAME = 'CN=Administrator, CN=Users, DC=hacklabtest, DC=local'
 
 class EnumerateAD:
 
-	def __init__(self, domainController, ldaps, ldap, no_credentials, ip_address, connect, enumObj, status, username, password):
+	def __init__(self, domainController, ldaps, ldap, no_credentials, verbose, ip_address, connect, enumObj, status, username, password):
 		self.dc = domainController
 		self.dUser = username
 		self.ldaps = ldaps
@@ -45,6 +45,7 @@ class EnumerateAD:
 		self.noCreds = no_credentials
 		self.dIP = ip_address
 		self.status = status
+		self.verbose = verbose
 		self.people = []
 		#self.enumObj = enumObj
 		
@@ -60,7 +61,6 @@ class EnumerateAD:
 				self.conn = Connection(self.server_pool, self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
 				self.conn.open()
 				self.conn.bind()
-				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAPs", style = "success")
 			#Connect through LDAP
 			elif self.ldap:
@@ -70,7 +70,6 @@ class EnumerateAD:
 				self.conn = Connection(self.server_pool, self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
 				self.conn.open()
 				self.conn.bind()
-				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAP", style = "success")
 			#Connect through LDAPS without Credentials
 			elif self.no_Creds & self.ldaps:
@@ -82,7 +81,6 @@ class EnumerateAD:
 				self.conn = Connection(self.server_pool, user=self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
 				self.conn.open()
 				self.conn.bind()
-				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAPS and without credentials", style = "success")
 			#Connect through LDAP without Credentials
 			elif self.no_Creds & self.ldap:
@@ -93,7 +91,6 @@ class EnumerateAD:
 				self.conn = Connection(self.server_pool, auto_bind=True, auto_referrals = False, fast_decoder=True)
 				self.conn.open()
 				self.conn.bind()
-				sleep(1)
 				console.print("[Success] Connected to Active Directory through LDAP and without credentials", style = "success")            			
 			else :
 				sleep(1)
@@ -106,14 +103,21 @@ class EnumerateAD:
 	#Enumerate Active Directory Users		
 	def enumerateUsers(self):
 		self.status.update("[bold white]Finding Active Directory Users...")
-		sleep(3)
+		sleep(2)
 		try:
-			#Search AD
-			self.conn.search(search_base=LDAP_BASE_DN, search_filter=SEARCH_FILTER, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
-			console.print ("[Success] Got all domain users ", style = "success")
-			pprint(self.conn.entries)
-			#Unbind connection to AD
-			self.conn.unbind()
+			#Search AD  Users (Verbose)
+			if self.verbose:
+				self.conn.search(search_base=LDAP_BASE_DN, search_filter=SEARCH_FILTER, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
+				console.print ("[Success] Got all domain users ", style = "success")
+				pprint(self.conn.entries)
+				self.conn.unbind()
+			else:
+				uAttributes = ['uid', 'sn', 'givenName', 'mail', 'uidNumber', 'sn', 'cn']
+				self.conn.search(search_base=LDAP_BASE_DN, search_filter=SEARCH_FILTER, search_scope=SUBTREE, attributes = uAttributes, size_limit=0)
+				console.print ("[Success] Got all domain users ", style = "success")
+				pprint(self.conn.entries)
+				self.conn.unbind()
+			
 		except LDAPException as e:
 			console.print ("[Warning] No Users found", style = "warning")
 			pprint ("Error {}".format(e))
@@ -150,6 +154,7 @@ def main():
 	parser.add_argument('-ip', '--ip_address', type=str, help='ip address of Active Directory')
 	parser.add_argument('-e', '--enumObj', help='Enumerate Active Directory Objects', action='store_true')
 	parser.add_argument('-c', '--connect', help='Just connect and nothing else', action='store_true')
+	parser.add_argument('-v', '--verbose', action='store_true')
 	
 	args = parser.parse_args()
 	
@@ -179,7 +184,7 @@ def main():
 	
 	#Run main features
 	try:
-		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.ip_address, args.connect, args.enumObj, status, args.username, args.password)
+		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.verbose, args.ip_address, args.connect, args.enumObj, status, args.username, args.password)
 		enumAD.connect()
 		if args.enumObj is not False:
 			enumAD.enumerateUsers()
