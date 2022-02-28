@@ -111,7 +111,7 @@ class EnumerateAD:
 				uAttributes = ['uid', 'sn', 'givenName', 'mail', 'uidNumber', 'sn', 'cn']
 				self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=person)', search_scope=SUBTREE, attributes = uAttributes, size_limit=0)
 				console.print ("[Success] Got all domain users ", style = "success")
-				pprint(self.conn.entries)
+				pprint(self.conn.entries)		
 		except LDAPException as e:
 			console.print ("[Warning] No Users found", style = "warning")
 			pprint ("Error {}".format(e))
@@ -124,6 +124,7 @@ class EnumerateAD:
 		except KeyboardInterrupt:
 			sys.exit(1)
 			self.conn.unbind()
+			console.print ("[Warning] Aborted", style = "warning")
 				
 	def enumerateGroups(self):
 		self.status.update("[bold white]Finding Active Directory Groups...")
@@ -134,8 +135,8 @@ class EnumerateAD:
 			console.print ("[Success] Got all groups ", style = "success")
 			pprint(self.conn.entries)
 			self.conn.unbind()
+			console.print("[Success] Finished", style="success")	
 			sys.exit(1)
-			
 		except LDAPException as e:
 			console.print ("[Warning] No Groups found", style = "warning")
 			pprint ("Error {}".format(e))
@@ -157,6 +158,7 @@ def main():
 	                  __.                                   	By Tom Gardner
 	         ________/o |)
 	        {_______{_rs|
+	        
        A Prototype Active Directory Vulnerability Identification, Exploitation, & Reporting Tool
     |*------------------------------------------------------------------------------------------*|
     '''))
@@ -173,7 +175,6 @@ def main():
 	parser.add_argument('-e', '--enumObj', help='Enumerate Active Directory Objects', action='store_true')
 	parser.add_argument('-c', '--connect', help='Just connect and nothing else', action='store_true')
 	parser.add_argument('-v', '--verbose', action='store_true')
-	
 	args = parser.parse_args()
 	
 	#Display help page if no arguments are provided
@@ -188,15 +189,19 @@ def main():
 	domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
 	domainMatch = domainRE.findall(args.dc)
 
-	#if invalid domain name and username format
+	ipRE = re.compile(r"^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$")
+	ipaddr = ipRE.findall(args.ip_address)
+	
+	#if invalid domain name and ip address format
 	if not domainMatch:
-		console.print("[Error] Domain flag has to be in the format 'hacklab.local'", style = "error")
+		console.print("[Error] {} is not a valid domain name'".format(args.dc), style = "error")
+		sys.exit(1)
+	if not ipaddr:
+		console.print("[Error] {} is not a valid IP Address'".format(args.ip_address), style = "error")
 		sys.exit(1)
 		
 	titleArt()
 	console.print("[Success] Lumberjack Started", style="success")	
-	
-	#The clock is running!
 	start_time = datetime.now()
 	
 	#Run main features
