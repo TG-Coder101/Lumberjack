@@ -28,7 +28,7 @@ except Exception as e:
 lumberjack.py
 """
 
-custom_theme = Theme({"success": "blue", "error": "red", "warning": "yellow"})
+custom_theme = Theme({"success": "cyan", "error": "red", "warning": "yellow", "status": "green"})
 console = Console(theme=custom_theme)
 LDAP_BASE_DN = 'DC=hacklabtest,DC=local'
 USER_NAME = 'CN=Administrator, CN=Users, DC=hacklabtest, DC=local'
@@ -45,6 +45,7 @@ class EnumerateAD:
 		self.dIP = ip_address
 		self.status = status
 		self.verbose = verbose
+
 		
 	#Connect to domain
 	def connect(self):
@@ -99,39 +100,37 @@ class EnumerateAD:
 			
 	#Enumerate Active Directory Users		
 	def enumerateUsers(self):
-		self.status.update("[bold white]Finding Active Directory Users...")
-		sleep(1)
-		try:
+		try:			
+			self.status.update("[bold white]Finding Active Directory Users...")
 			#Search AD  Users (Verbose)
 			if self.verbose:
 				self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=person)', search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
 				console.print ("[Success] Got all domain users ", style = "success")
 				pprint(self.conn.entries)
-				enumGroups = input('Continue?')
-				if enumG == "":
-					enumerateGroups(self)
-				else:
-					sys.exit(1)
-					self.conn.unbind()
 			else:
 				uAttributes = ['uid', 'sn', 'givenName', 'mail', 'uidNumber', 'sn', 'cn']
 				self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=person)', search_scope=SUBTREE, attributes = uAttributes, size_limit=0)
 				console.print ("[Success] Got all domain users ", style = "success")
 				pprint(self.conn.entries)
-				self.conn.unbind()
-			
 		except LDAPException as e:
 			console.print ("[Warning] No Users found", style = "warning")
 			pprint ("Error {}".format(e))
 			sys.exit(1)
-			
-			
+		try:
+			self.status.update("[bold white]Waiting...")
+			console.print ("[Status] Continue?", style = "status")
+			input("")
+			EnumerateAD.enumerateGroups(self)
+		except KeyboardInterrupt:
+			sys.exit(1)
+			self.conn.unbind()
+				
 	def enumerateGroups(self):
 		self.status.update("[bold white]Finding Active Directory Groups...")
 		sleep(2)
 		try:
 			#Search AD  Group
-			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=group)', search_scope=SUBTREE, attributes = '(member)', size_limit=0)
+			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=group)', search_scope=SUBTREE, attributes = 'member', size_limit=0)
 			console.print ("[Success] Got all groups ", style = "success")
 			pprint(self.conn.entries)
 			self.conn.unbind()
@@ -158,7 +157,6 @@ def main():
 	                  __.                                   	By Tom Gardner
 	         ________/o |)
 	        {_______{_rs|
-
        A Prototype Active Directory Vulnerability Identification, Exploitation, & Reporting Tool
     |*------------------------------------------------------------------------------------------*|
     '''))
