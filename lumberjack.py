@@ -45,8 +45,7 @@ class EnumerateAD:
 		self.dIP = ip_address
 		self.status = status
 		self.verbose = verbose
-
-		
+	
 	#Connect to domain
 	def connect(self):
 		self.status.update(status="[bold white]Connecting to Active Directory...")
