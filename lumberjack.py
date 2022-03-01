@@ -10,7 +10,6 @@ try:
     	import datetime
     	import json
 
-	
     	#other imports
     	from datetime import datetime
     	from pprint import pprint
