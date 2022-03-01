@@ -3,13 +3,13 @@
 try:
 	#module imports
     	import argparse
-    	import os
     	import re
     	import sys
     	import textwrap
     	import ldap3
     	import datetime
-    	import pyfiglet
+    	import json
+
 	
     	#other imports
     	from datetime import datetime
@@ -28,7 +28,7 @@ except Exception as e:
 lumberjack.py
 """
 
-custom_theme = Theme({"success": "cyan", "error": "red", "warning": "yellow", "status": "green"})
+custom_theme = Theme({"success": "cyan", "error": "red", "warning": "yellow", "status": "green", "info": "purple"})
 console = Console(theme=custom_theme)
 LDAP_BASE_DN = 'DC=hacklabtest,DC=local'
 USER_NAME = 'CN=Administrator, CN=Users, DC=hacklabtest, DC=local'
@@ -45,7 +45,7 @@ class EnumerateAD:
 		self.dIP = ip_address
 		self.status = status
 		self.verbose = verbose
-	
+		
 	#Connect to domain
 	def connect(self):
 		self.status.update(status="[bold white]Connecting to Active Directory...")
@@ -55,7 +55,8 @@ class EnumerateAD:
 				self.server_pool = ServerPool(self.dIP)
 				self.server = Server(self.dc, port=646, use_ssl=True, get_info=ALL)
 				self.server_pool.add(self.server)
-				self.conn = Connection(self.server_pool, self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.conn = Connection(self.server_pool, user=self.dUser, password=self.dPassword, fast_decoder=True, auto_bind=True, auto_referrals=True, check_names=False, read_only=True,
+              						lazy=False, raise_exceptions=False)
 				self.conn.open()
 				self.conn.bind()
 				console.print("[Success] Connected to Active Directory through LDAPs", style = "success")
@@ -101,16 +102,18 @@ class EnumerateAD:
 	def enumerateUsers(self):
 		try:			
 			self.status.update("[bold white]Finding Active Directory Users...")
+			sleep(2)
 			#Search AD  Users (Verbose)
 			if self.verbose:
 				self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=person)', search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
 				console.print ("[Success] Got all domain users ", style = "success")
-				pprint(self.conn.entries)
+				console.print('Found {0} user accounts'.format(len(self.conn.entries)), style = "info")
+				pprint(self.conn.entries)	
 			else:
 				uAttributes = ['uid', 'sn', 'givenName', 'mail', 'uidNumber', 'sn', 'cn']
 				self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=person)', search_scope=SUBTREE, attributes = uAttributes, size_limit=0)
 				console.print ("[Success] Got all domain users ", style = "success")
-				pprint(self.conn.entries)		
+				pprint(self.conn.entries)
 		except LDAPException as e:
 			console.print ("[Warning] No Users found", style = "warning")
 			pprint ("Error {}".format(e))
@@ -132,15 +135,26 @@ class EnumerateAD:
 			#Search AD  Group
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=group)', search_scope=SUBTREE, attributes = 'member', size_limit=0)
 			console.print ("[Success] Got all groups ", style = "success")
+			console.print('Found {0} groups'.format(len(self.conn.entries)), style = "info")
 			pprint(self.conn.entries)
-			self.conn.unbind()
-			console.print("[Success] Finished", style="success")	
-			sys.exit(1)
 		except LDAPException as e:
 			console.print ("[Warning] No Groups found", style = "warning")
 			pprint ("Error {}".format(e))
 			sys.exit(1)
-
+			
+	def enumKerbPreAuth(self):
+		self.status.update("[bold white]Finding Users that do not require Kerberos preauthentication...")
+		try:	
+			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', 
+					search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
+			for entry in self.conn.entries:
+			            console.print('Found {0} accounts that does not require Kerberos preauthentication'.format(len(entry)), style = "info")
+			pprint(self.conn.entries)  
+		except LDAPException as e:   
+			console.print ("[Warning] No ASREP Roastable users found", style = "warning")
+			pprint ("Error {}".format(e))
+			sys.exit(1)  	
+				      
 def titleArt():
 	f = Figlet(font="slant")
 	cprint(colored(f.renderText('Lumberjack'), 'cyan'))
@@ -160,7 +174,7 @@ def main():
 	        
        A Prototype Active Directory Vulnerability Identification, Exploitation, & Reporting Tool
     |*------------------------------------------------------------------------------------------*|
-    '''))
+   	 '''))
 
 	#Required arguments
 	parser.add_argument('-dc', type=str, help='Hostname of the Domain Controller')
