@@ -54,8 +54,8 @@ class EnumerateAD:
 				self.server_pool = ServerPool(self.dIP)
 				self.server = Server(self.dc, port=646, use_ssl=True, get_info=ALL)
 				self.server_pool.add(self.server)
-				self.conn = Connection(self.server_pool, user=self.dUser, password=self.dPassword, fast_decoder=True, auto_bind=True, auto_referrals=True, check_names=False, read_only=True,
-              						lazy=False, raise_exceptions=False)
+				self.conn = Connection(self.server_pool, user=self.dUser, password=self.dPassword, fast_decoder=True, auto_bind=True,
+							auto_referrals=True, check_names=False, read_only=True, lazy=False, raise_exceptions=False)
 				self.conn.open()
 				self.conn.bind()
 				console.print("[Success] Connected to Active Directory through LDAPs", style = "success")
@@ -112,6 +112,7 @@ class EnumerateAD:
 				uAttributes = ['uid', 'sn', 'givenName', 'mail', 'uidNumber', 'sn', 'cn']
 				self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=person)', search_scope=SUBTREE, attributes = uAttributes, size_limit=0)
 				console.print ("[Success] Got all domain users ", style = "success")
+				console.print('Found {0} user accounts'.format(len(self.conn.entries)), style = "info")
 				pprint(self.conn.entries)
 		except LDAPException as e:
 			console.print ("[Warning] No Users found", style = "warning")
@@ -119,7 +120,7 @@ class EnumerateAD:
 			sys.exit(1)
 		try:
 			self.status.update("[bold white]Waiting...")
-			console.print ("[Status] Continue?", style = "status")
+			console.print ("[Status] Find Groups?", style = "status")
 			input("")
 			EnumerateAD.enumerateGroups(self)
 		except KeyboardInterrupt:
@@ -140,6 +141,15 @@ class EnumerateAD:
 			console.print ("[Warning] No Groups found", style = "warning")
 			pprint ("Error {}".format(e))
 			sys.exit(1)
+		try:
+			self.status.update("[bold white]Waiting...")
+			console.print ("[Status] Find ASREP Roastable Users?", style = "status")
+			input("")
+			EnumerateAD.enumKerbPreAuth(self)
+		except KeyboardInterrupt:
+			sys.exit(1)
+			self.conn.unbind()
+			console.print ("[Warning] Aborted", style = "warning")
 			
 	def enumKerbPreAuth(self):
 		self.status.update("[bold white]Finding Users that do not require Kerberos preauthentication...")
@@ -153,7 +163,7 @@ class EnumerateAD:
 			console.print ("[Warning] No ASREP Roastable users found", style = "warning")
 			pprint ("Error {}".format(e))
 			sys.exit(1)  	
-				      
+	      
 def titleArt():
 	f = Figlet(font="slant")
 	cprint(colored(f.renderText('Lumberjack'), 'cyan'))
