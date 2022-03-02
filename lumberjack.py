@@ -259,7 +259,7 @@ def main():
 	if args.connect:
 		args.enumObj = False
 		
-	# If theres more than 4 sub'ed (test.test.domain.local) or invalid username format
+	# Regex for invalid domain name or invalid ip address format
 	domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
 	domainMatch = domainRE.findall(args.dc)
 
