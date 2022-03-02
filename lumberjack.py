@@ -30,7 +30,6 @@ lumberjack.py
 custom_theme = Theme({"success": "cyan", "error": "red", "warning": "yellow", "status": "green", "info": "purple"})
 console = Console(theme=custom_theme)
 LDAP_BASE_DN = 'DC=hacklabtest,DC=local'
-USER_NAME = 'CN=Administrator, CN=Users, DC=hacklabtest, DC=local'
 
 class EnumerateAD:
 
@@ -75,7 +74,8 @@ class EnumerateAD:
 				self.server_pool = ServerPool(self.dIP)
 				self.server = Server(self.dc, port=646, use_ssl=True, get_info=ALL)
 				self.server_pool.add(self.server)
-				self.conn = Connection(self.server_pool, user=self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
+				self.conn = Connection(self.server_pool, user=self.dUser, password=self.dPassword, fast_decoder=True, auto_bind=True,
+							auto_referrals=True, check_names=False, read_only=True, lazy=False, raise_exceptions=False)
 				self.conn.open()
 				self.conn.bind()
 				console.print("[Success] Connected to Active Directory through LDAPS and without credentials", style = "success")
@@ -102,7 +102,7 @@ class EnumerateAD:
 		try:			
 			self.status.update("[bold white]Finding Active Directory Users...")
 			sleep(2)
-			#Search AD  Users (Verbose)
+			#Search AD Users (Verbose)
 			if self.verbose:
 				self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=person)', search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
 				console.print ("[Success] Got all domain users ", style = "success")
@@ -120,6 +120,31 @@ class EnumerateAD:
 			sys.exit(1)
 		try:
 			self.status.update("[bold white]Waiting...")
+			console.print ("[Status] Find Computers?", style = "status")
+			input("")
+			EnumerateAD.enumComputers(self)
+		except KeyboardInterrupt:
+			sys.exit(1)
+			self.conn.unbind()
+			console.print ("[Warning] Aborted", style = "warning")
+			
+	#Enumerate Active Directory Computers		
+	def enumComputers(self):
+		try:			
+			self.status.update("[bold white]Finding Active Directory Computers...")
+			sleep(2)
+			#Search AD Computers
+			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(&(objectCategory=computer)(objectClass=computer))',
+					 search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
+			console.print ("[Success] Got all domain computers ", style = "success")
+			console.print('Found {0} computers'.format(len(self.conn.entries)), style = "info")
+			pprint(self.conn.entries)	
+		except LDAPException as e:
+			console.print ("[Warning] No Computers found", style = "warning")
+			pprint ("Error {}".format(e))
+			sys.exit(1)
+		try:
+			self.status.update("[bold white]Waiting...")
 			console.print ("[Status] Find Groups?", style = "status")
 			input("")
 			EnumerateAD.enumerateGroups(self)
@@ -127,18 +152,45 @@ class EnumerateAD:
 			sys.exit(1)
 			self.conn.unbind()
 			console.print ("[Warning] Aborted", style = "warning")
-				
+			
+	#Enumerate Active Directory Groups			
 	def enumerateGroups(self):
 		self.status.update("[bold white]Finding Active Directory Groups...")
 		sleep(2)
 		try:
-			#Search AD  Group
-			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=group)', search_scope=SUBTREE, attributes = 'member', size_limit=0)
+			#Search AD Group
+			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(groupType:1.2.840.113556.1.4.804:=2147483648)(member=*))',
+					 search_scope=SUBTREE, attributes = 'member', size_limit=0)
 			console.print ("[Success] Got all groups ", style = "success")
 			console.print('Found {0} groups'.format(len(self.conn.entries)), style = "info")
 			pprint(self.conn.entries)
 		except LDAPException as e:
 			console.print ("[Warning] No Groups found", style = "warning")
+			pprint ("Error {}".format(e))
+			sys.exit(1)
+		try:
+			self.status.update("[bold white]Waiting...")
+			console.print ("[Status] Find Organisational Units?", style = "status")
+			input("")
+			EnumerateAD.enumerateOUs(self)
+		except KeyboardInterrupt:
+			sys.exit(1)
+			self.conn.unbind()
+			console.print ("[Warning] Aborted", style = "warning")
+			
+	#Enumerate Organisational Units
+	def enumerateOUs(self):
+		self.status.update("[bold white]Finding Organisational Units...")
+		sleep(2)
+		try:
+			#Search AD Organisational Units
+			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectclass=organizationalUnit)',
+					 search_scope=SUBTREE, attributes = 'member', size_limit=0)
+			console.print ("[Success] Got all OUs ", style = "success")
+			console.print('Found {0} OUs'.format(len(self.conn.entries)), style = "info")
+			pprint(self.conn.entries)
+		except LDAPException as e:
+			console.print ("[Warning] No OUs found", style = "warning")
 			pprint ("Error {}".format(e))
 			sys.exit(1)
 		try:
@@ -150,14 +202,14 @@ class EnumerateAD:
 			sys.exit(1)
 			self.conn.unbind()
 			console.print ("[Warning] Aborted", style = "warning")
-			
+	
+	#Enumerate ASREP Roastable Users					
 	def enumKerbPreAuth(self):
-		self.status.update("[bold white]Finding Users that do not require Kerberos preauthentication...")
+		self.status.update("[bold white]Finding Users that do not require Kerberos Pre-Authentication...")
 		try:	
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', 
 					search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
-			for entry in self.conn.entries:
-			            console.print('Found {0} accounts that does not require Kerberos preauthentication'.format(len(entry)), style = "info")
+			console.print('Found {0} accounts that does not require Kerberos preauthentication'.format(len(self.conn.entries)), style = "info")
 			pprint(self.conn.entries)  
 		except LDAPException as e:   
 			console.print ("[Warning] No ASREP Roastable users found", style = "warning")
@@ -171,13 +223,13 @@ def titleArt():
 def main():
 
 	parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
-	            __                    __              _            __
-	           / /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
-	          / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
-	         / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<
-	        /_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|
-	                                           /___/
-	                  __.                                   	By Tom Gardner
+			    __                    __              _            __
+			   / /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
+			  / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
+			 / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<
+			/_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|
+			                                   /___/
+	                  __.                                   By Tom Gardner
 	         ________/o |)
 	        {_______{_rs|
 	        
