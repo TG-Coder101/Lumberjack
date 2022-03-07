@@ -8,7 +8,8 @@ try:
     	import textwrap
     	import ldap3
     	import datetime
-    	import json
+    	import json	
+    	import socket
 
     	#other imports
     	from datetime import datetime
@@ -31,18 +32,29 @@ custom_theme = Theme({"success": "cyan", "error": "red", "warning": "yellow", "s
 console = Console(theme=custom_theme)
 LDAP_BASE_DN = 'DC=hacklabtest,DC=local'
 
-class EnumerateAD:
+#Enumeration Class
+class EnumerateAD(object):
 
-	def __init__(self, domainController, ldaps, ldap, no_credentials, verbose, ip_address, connect, enumObj, status, username, password):
-		self.dc = domainController
+	def __init__(self, domainController, ldaps, ldap, no_credentials, verbose, ip_address, connect, enumObj, fuzz, status, username, password):
+		
+		if domainController:
+			self.dc = domainController
+		else: 
+			self.getDCName()
+		
+		if ip_address:
+			self.dIP = ip_address
+		else:
+			self.getDC_IP(domainController)
+
 		self.dUser = username
 		self.ldaps = ldaps
 		self.ldap = ldap
 		self.dPassword = password
 		self.noCreds = no_credentials
-		self.dIP = ip_address
 		self.status = status
 		self.verbose = verbose
+		self.fuzz = fuzz
 		
 	#Connect to domain
 	def connect(self):
@@ -97,11 +109,34 @@ class EnumerateAD:
 			console.print ("[Error] Failed to connect: {} ".format(e), style = "error")
 			raise LDAPBindError
 			
+	# Get the IP address of the domain controller		
+	def getDC_IP(self, domainController):		
+
+		try:
+			ip_address = socket.gethostbyname(domainController)
+			console.print("[Success] IP address of the domain is {}".format(ip_address))
+		except:
+			console.print("[Error] Unable to locate IP Address of Domain Controller through host lookup. Please try again", style = "error")            			
+			sys.exit(1)
+
+		self.dIP = ip_address
+	
+	# Get the IP address of the domain name		
+	def getDCName(self):		
+ 		try:
+			domainController = socket.gethostname()
+			console.print("[Success] Domain Name is {}".format(domainController))
+		except:
+			console.print("[Error] Unable to locate Domain Name through host lookup. Please try again", style = "error")            			
+			sys.exit(1)
+
+		self.dc = domainController
+		
 	#Enumerate Active Directory Users		
 	def enumerateUsers(self):
 		try:			
 			self.status.update("[bold white]Finding Active Directory Users...")
-			sleep(2)
+			sleep(1)
 			#Search AD Users (Verbose)
 			if self.verbose:
 				self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=person)', search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
@@ -132,7 +167,7 @@ class EnumerateAD:
 	def enumComputers(self):
 		try:			
 			self.status.update("[bold white]Finding Active Directory Computers...")
-			sleep(2)
+			sleep(1)
 			#Search AD Computers
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(&(objectCategory=computer)(objectClass=computer))',
 					 search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
@@ -156,7 +191,7 @@ class EnumerateAD:
 	#Enumerate Active Directory Groups			
 	def enumerateGroups(self):
 		self.status.update("[bold white]Finding Active Directory Groups...")
-		sleep(2)
+		sleep(1)
 		try:
 			#Search AD Group
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(groupType:1.2.840.113556.1.4.804:=2147483648)(member=*))',
@@ -181,7 +216,7 @@ class EnumerateAD:
 	#Enumerate Organisational Units
 	def enumerateOUs(self):
 		self.status.update("[bold white]Finding Organisational Units...")
-		sleep(2)
+		sleep(1)
 		try:
 			#Search AD Organisational Units
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectclass=organizationalUnit)',
@@ -206,6 +241,7 @@ class EnumerateAD:
 	#Enumerate ASREP Roastable Users					
 	def enumKerbPreAuth(self):
 		self.status.update("[bold white]Finding Users that do not require Kerberos Pre-Authentication...")
+		sleep(1)
 		try:	
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', 
 					search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
@@ -215,7 +251,24 @@ class EnumerateAD:
 			console.print ("[Warning] No ASREP Roastable users found", style = "warning")
 			pprint ("Error {}".format(e))
 			sys.exit(1)  	
-	      
+			
+	#Fuzz AD with ANR (Ambiguous Name Resolution)
+	def searchRandom(self, fobject, objectCategory=''):
+		self.status.update("[bold white]Fuzzing Active Directory for:...")
+		sleep(1)
+		if objectCategory:
+			searchFilter = '(&(objectCategory={})(anr={}))'.format(objectCategory, fobject)
+		else:
+			searchFilter = '(anr={})'.format(fobject)
+		try:	
+			self.conn.search(search_base=LDAP_BASE_DN, search_filter=searchFilter, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
+			console.print('Found {0} objects'.format(len(self.conn.entries)), style = "info")
+			pprint(self.conn.entries)  
+		except LDAPException as e:   
+			console.print ("[Warning] Nothing found", style = "warning")
+			pprint ("Error {}".format(e))
+			sys.exit(1)  	
+
 def titleArt():
 	f = Figlet(font="slant")
 	cprint(colored(f.renderText('Lumberjack'), 'cyan'))
@@ -249,6 +302,7 @@ def main():
 	parser.add_argument('-e', '--enumObj', help='Enumerate Active Directory Objects', action='store_true')
 	parser.add_argument('-c', '--connect', help='Just connect and nothing else', action='store_true')
 	parser.add_argument('-v', '--verbose', action='store_true')
+	parser.add_argument('-f', '--fuzz', action='store_true')
 	args = parser.parse_args()
 	
 	#Display help page if no arguments are provided
@@ -256,7 +310,13 @@ def main():
 		console.print("[Warning] No Arguments Provided", style = "warning")
 		parser.print_help()
 		parser.exit(1)
+		
 	if args.connect:
+		args.enumObj = False
+		args.fuzz = False	
+	elif args.enumObj:
+		args.fuzz = False
+	elif args.fuzz:
 		args.enumObj = False
 		
 	# Regex for invalid domain name or invalid ip address format
@@ -280,10 +340,13 @@ def main():
 	
 	#Run main features
 	try:
-		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.verbose, args.ip_address, args.connect, args.enumObj, status, args.username, args.password)
+		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.verbose, args.ip_address, args.connect, args.enumObj, args.fuzz, status, args.username, args.password)
 		enumAD.connect()
+
 		if args.enumObj is not False:
 			enumAD.enumerateUsers()
+		elif args.fuzz is not False:
+			enumAD.searchRandom(args.fuzz)
 		else:
 			sys.exit(1)
 
