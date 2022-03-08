@@ -36,7 +36,7 @@ LDAP_BASE_DN = 'DC=hacklabtest,DC=local'
 #Enumeration Class
 class EnumerateAD(object):
 
-	def __init__(self, domainController, ldaps, ldap, no_credentials, verbose, ip_address, connect, enumObj, fuzz, status, username=None):
+	def __init__(self, domainController, ldaps, ldap, no_credentials, verbose, ip_address, connect, enumObj, fuzz, status, username, password):
 		
 		if domainController:
 			self.dc = domainController
@@ -49,19 +49,17 @@ class EnumerateAD(object):
 			self.getDC_IP(domainController)
 
 		self.dUser = username
+		self.dPassword = password
 		self.ldaps = ldaps
 		self.ldap = ldap
 		self.noCreds = no_credentials
 		self.status = status
 		self.verbose = verbose
 		self.fuzz = fuzz
-		self.dPassword = False
 		
 	#check if the credentials have been entered
 	def checks(self):
 		if self.dUser is not False:
-			if not self.dPassword:
-		    		self.dPassword = str(getpass())
 			self.connectCreds()
 		else:
 			self.dUser = ''
@@ -212,9 +210,10 @@ class EnumerateAD(object):
 		self.status.update("[bold white]Finding Active Directory Groups...")
 		sleep(1)
 		try:
+			attrs = ['distinguishedName', 'cn', 'member']
 			#Search AD Group
-			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(groupType:1.2.840.113556.1.4.804:=2147483648)(member=*))',
-					 search_scope=SUBTREE, attributes = 'member', size_limit=0)
+			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=group)',
+					 search_scope=SUBTREE, attributes = attrs, size_limit=0)
 			console.print ("[Success] Got all groups ", style = "success")
 			console.print('Found {0} groups'.format(len(self.conn.entries)), style = "info")
 			pprint(self.conn.entries)
@@ -314,6 +313,7 @@ def main():
 	parser.add_argument('-ls', '--ldaps', help='Connect to domain through LDAPS (Secure)', action='store_true')
 	parser.add_argument('-l', '--ldap', help='Connect to domain through LDAP', action='store_true')
 	parser.add_argument('-u', '--username', type=str, help='Username of domain user. The username format must be `user@domain.org`')
+	parser.add_argument('-p', '--password', type=str, help='Username Password`')
 	parser.add_argument('-n', '--no_credentials', help='Run without credentials', action='store_true')
 	parser.add_argument('-h', '--help', help='show this help message and exit', action='help')
 	parser.add_argument('-ip', '--ip_address', type=str, help='ip address of Active Directory')
@@ -361,7 +361,7 @@ def main():
 	
 	#Run main features
 	try:
-		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.verbose, args.ip_address, args.connect, args.enumObj, args.fuzz, status, args.username)
+		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.verbose, args.ip_address, args.connect, args.enumObj, args.fuzz, status, args.username, args.password)
 		enumAD.checks()
 		if args.enumObj is not False:
 			enumAD.enumerateUsers()
