@@ -16,6 +16,7 @@ try:
     	from pprint import pprint
     	from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute, ServerPool
     	from ldap3.core.exceptions import LDAPBindError, LDAPException
+    	from getpass import getpass
     	from time import sleep
     	from rich.console import Console
     	from termcolor import colored, cprint
@@ -35,7 +36,7 @@ LDAP_BASE_DN = 'DC=hacklabtest,DC=local'
 #Enumeration Class
 class EnumerateAD(object):
 
-	def __init__(self, domainController, ldaps, ldap, no_credentials, verbose, ip_address, connect, enumObj, fuzz, status, username, password):
+	def __init__(self, domainController, ldaps, ldap, no_credentials, verbose, ip_address, connect, enumObj, fuzz, status, username=None):
 		
 		if domainController:
 			self.dc = domainController
@@ -50,14 +51,25 @@ class EnumerateAD(object):
 		self.dUser = username
 		self.ldaps = ldaps
 		self.ldap = ldap
-		self.dPassword = password
 		self.noCreds = no_credentials
 		self.status = status
 		self.verbose = verbose
 		self.fuzz = fuzz
+		self.dPassword = False
 		
+	#check if the credentials have been entered
+	def checks(self):
+		if self.dUser is not False:
+			if not self.dPassword:
+		    		self.dPassword = str(getpass())
+			self.connectCreds()
+		else:
+			self.dUser = ''
+			self.dPassword = ''
+			self.connectNoCreds()	
+	
 	#Connect to domain
-	def connect(self):
+	def connectCreds(self):
 		self.status.update(status="[bold white]Connecting to Active Directory...")
 		try:
 			#Connect through LDAPS (Secure)
@@ -78,11 +90,20 @@ class EnumerateAD(object):
 				self.conn = Connection(self.server_pool, self.dUser, password=self.dPassword, auto_bind=True, auto_referrals = False, fast_decoder=True)
 				self.conn.open()
 				self.conn.bind()
-				console.print("[Success] Connected to Active Directory through LDAP", style = "success")
+				console.print("[Success] Connected to Active Directory through LDAP", style = "success")			
+			else :
+				sleep(1)
+				console.print ("[Error] Failed to connect: ", style = "error")
+				raise LDAPBindError	
+		except Exception as e:
+			console.print ("[Error] Failed to connect: {} ".format(e), style = "error")
+			raise LDAPBindError
+	
+	def connectNoCreds(self):
+		self.status.update(status="[bold white]Connecting to Active Directory...")
+		try:
 			#Connect through LDAPS without Credentials
-			elif self.no_Creds & self.ldaps:
-				self.dUser = ''
-				self.dPassword = ''
+			if self.noCreds & self.ldaps:
 				self.server_pool = ServerPool(self.dIP)
 				self.server = Server(self.dc, port=646, use_ssl=True, get_info=ALL)
 				self.server_pool.add(self.server)
@@ -92,15 +113,13 @@ class EnumerateAD(object):
 				self.conn.bind()
 				console.print("[Success] Connected to Active Directory through LDAPS and without credentials", style = "success")
 			#Connect through LDAP without Credentials
-			elif self.no_Creds & self.ldap:
-				self.dUser = ''
-				self.dPassword = ''
+			elif self.noCreds & self.ldap:
 				self.server_pool = ServerPool(self.dIP)
 				self.server = Server(self.dc, get_info=ALL)
 				self.conn = Connection(self.server_pool, auto_bind=True, auto_referrals = False, fast_decoder=True)
 				self.conn.open()
 				self.conn.bind()
-				console.print("[Success] Connected to Active Directory through LDAP and without credentials", style = "success")            			
+				console.print("[Success] Connected to Active Directory through LDAP and without credentials", style = "success")            
 			else :
 				sleep(1)
 				console.print ("[Error] Failed to connect: ", style = "error")
@@ -108,7 +127,7 @@ class EnumerateAD(object):
 		except Exception as e:
 			console.print ("[Error] Failed to connect: {} ".format(e), style = "error")
 			raise LDAPBindError
-			
+		
 	# Get the IP address of the domain controller		
 	def getDC_IP(self, domainController):		
 
@@ -123,7 +142,7 @@ class EnumerateAD(object):
 	
 	# Get the IP address of the domain name		
 	def getDCName(self):		
- 		try:
+		try:
 			domainController = socket.gethostname()
 			console.print("[Success] Domain Name is {}".format(domainController))
 		except:
@@ -142,7 +161,7 @@ class EnumerateAD(object):
 				self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=person)', search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
 				console.print ("[Success] Got all domain users ", style = "success")
 				console.print('Found {0} user accounts'.format(len(self.conn.entries)), style = "info")
-				pprint(self.conn.entries)	
+				pprint(self.conn.entries)
 			else:
 				uAttributes = ['uid', 'sn', 'givenName', 'mail', 'uidNumber', 'sn', 'cn']
 				self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=person)', search_scope=SUBTREE, attributes = uAttributes, size_limit=0)
@@ -173,7 +192,7 @@ class EnumerateAD(object):
 					 search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
 			console.print ("[Success] Got all domain computers ", style = "success")
 			console.print('Found {0} computers'.format(len(self.conn.entries)), style = "info")
-			pprint(self.conn.entries)	
+			pprint(self.conn.entries)
 		except LDAPException as e:
 			console.print ("[Warning] No Computers found", style = "warning")
 			pprint ("Error {}".format(e))
@@ -263,7 +282,7 @@ class EnumerateAD(object):
 		try:	
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter=searchFilter, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
 			console.print('Found {0} objects'.format(len(self.conn.entries)), style = "info")
-			pprint(self.conn.entries)  
+			pprint(self.conn.entries) 
 		except LDAPException as e:   
 			console.print ("[Warning] Nothing found", style = "warning")
 			pprint ("Error {}".format(e))
@@ -296,13 +315,12 @@ def main():
 	parser.add_argument('-l', '--ldap', help='Connect to domain through LDAP', action='store_true')
 	parser.add_argument('-u', '--username', type=str, help='Username of domain user. The username format must be `user@domain.org`')
 	parser.add_argument('-n', '--no_credentials', help='Run without credentials', action='store_true')
-	parser.add_argument('-pw', '--password', type=str ,help='Password of the domain user')
 	parser.add_argument('-h', '--help', help='show this help message and exit', action='help')
 	parser.add_argument('-ip', '--ip_address', type=str, help='ip address of Active Directory')
 	parser.add_argument('-e', '--enumObj', help='Enumerate Active Directory Objects', action='store_true')
 	parser.add_argument('-c', '--connect', help='Just connect and nothing else', action='store_true')
 	parser.add_argument('-v', '--verbose', action='store_true')
-	parser.add_argument('-f', '--fuzz', action='store_true')
+	parser.add_argument('-f', '--fuzz', type=str)
 	args = parser.parse_args()
 	
 	#Display help page if no arguments are provided
@@ -310,6 +328,9 @@ def main():
 		console.print("[Warning] No Arguments Provided", style = "warning")
 		parser.print_help()
 		parser.exit(1)
+	
+	if args.no_credentials:
+		args.username = False
 		
 	if args.connect:
 		args.enumObj = False
@@ -340,9 +361,8 @@ def main():
 	
 	#Run main features
 	try:
-		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.verbose, args.ip_address, args.connect, args.enumObj, args.fuzz, status, args.username, args.password)
-		enumAD.connect()
-
+		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.verbose, args.ip_address, args.connect, args.enumObj, args.fuzz, status, args.username)
+		enumAD.checks()
 		if args.enumObj is not False:
 			enumAD.enumerateUsers()
 		elif args.fuzz is not False:
