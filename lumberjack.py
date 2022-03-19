@@ -2,26 +2,26 @@
 # -*- coding: utf-8 -*-
 try:
 	#module imports
-    	import argparse
-    	import re
-    	import sys
-    	import textwrap
-    	import ldap3
-    	import datetime
-    	import json	
-    	import socket
+	import argparse
+	import re
+	import sys
+	import textwrap
+	import ldap3
+	import datetime
+	import json	
+	import socket
 
-    	#other imports
-    	from datetime import datetime
-    	from pprint import pprint
-    	from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute, ServerPool
-    	from ldap3.core.exceptions import LDAPBindError, LDAPException
-    	from getpass import getpass
-    	from time import sleep
-    	from rich.console import Console
-    	from termcolor import colored, cprint
-    	from rich.console import Theme
-    	from pyfiglet import Figlet
+	#other imports
+	from datetime import datetime
+	from pprint import pprint
+	from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BASE, ALL_ATTRIBUTES, Entry, Attribute, ServerPool
+	from ldap3.core.exceptions import LDAPBindError, LDAPException
+	from getpass import getpass
+	from time import sleep
+	from rich.console import Console
+	from termcolor import colored, cprint
+	from rich.console import Theme
+	from pyfiglet import Figlet
 except Exception as e:
     	print ("Error {}".format(e))
 
@@ -38,11 +38,12 @@ class EnumerateAD(object):
 
 	def __init__(self, domainController, ldaps, ldap, no_credentials, verbose, ip_address, connect, enumObj, fuzz, status, username, password):
 		
+		#If you dont know domain controller name
 		if domainController:
 			self.dc = domainController
 		else: 
 			self.getDCName()
-		
+		#If you dont know domain controller ip address
 		if ip_address:
 			self.dIP = ip_address
 		else:
@@ -66,7 +67,7 @@ class EnumerateAD(object):
 			self.dPassword = ''
 			self.connectNoCreds()	
 	
-	#Connect to domain
+	#Connect to Active Directory with credentials
 	def connectCreds(self):
 		self.status.update(status="[bold white]Connecting to Active Directory...")
 		try:
@@ -97,6 +98,7 @@ class EnumerateAD(object):
 			console.print ("[Error] Failed to connect: {} ".format(e), style = "error")
 			raise LDAPBindError
 	
+	#Try to connect to Active Directory without any credentials
 	def connectNoCreds(self):
 		self.status.update(status="[bold white]Connecting to Active Directory...")
 		try:
@@ -268,7 +270,35 @@ class EnumerateAD(object):
 		except LDAPException as e:   
 			console.print ("[Warning] No ASREP Roastable users found", style = "warning")
 			pprint ("Error {}".format(e))
-			sys.exit(1)  	
+			sys.exit(1)
+
+	#Enumerate accounts trusted for delegation (unconstrained delegation)					
+	def unconstrainedDelegation(self):
+		self.status.update("[bold white]Finding Users with unconstrained delegation...")
+		sleep(1)
+		try:	
+			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(userAccountControl:1.2.840.113556.1.4.803:=524288)', 
+					search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
+			console.print('Found {0} accounts with unconstrained delegation'.format(len(self.conn.entries)), style = "info")
+			pprint(self.conn.entries)  
+		except LDAPException as e:   
+			console.print ("[Warning] No affected users found", style = "warning")
+			pprint ("Error {}".format(e))
+			sys.exit(1)  	  	
+
+	#date of last password change
+	def passwdLastSet(self):
+		self.status.update("[bold white]Finding dates of last password change...")
+		sleep(1)
+		try:	
+			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(&(objectCategory=person)(objectClass=user)(pwdLastSet>=*))', 
+					search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
+			console.print('Found {0} accounts'.format(len(self.conn.entries)), style = "info")
+			pprint(self.conn.entries)  
+		except LDAPException as e:   
+			console.print ("[Warning] No users found", style = "warning")
+			pprint ("Error {}".format(e))
+			sys.exit(1)  	  	
 			
 	#Fuzz AD with ANR (Ambiguous Name Resolution)
 	def searchRandom(self, fobject, objectCategory=''):
@@ -308,7 +338,7 @@ def main():
     |*------------------------------------------------------------------------------------------*|
    	 '''))
 
-	#Required arguments
+	#arguments for argparse
 	parser.add_argument('-dc', type=str, help='Hostname of the Domain Controller')
 	parser.add_argument('-ls', '--ldaps', help='Connect to domain through LDAPS (Secure)', action='store_true')
 	parser.add_argument('-l', '--ldap', help='Connect to domain through LDAP', action='store_true')
@@ -320,7 +350,7 @@ def main():
 	parser.add_argument('-e', '--enumObj', help='Enumerate Active Directory Objects', action='store_true')
 	parser.add_argument('-c', '--connect', help='Just connect and nothing else', action='store_true')
 	parser.add_argument('-v', '--verbose', action='store_true')
-	parser.add_argument('-f', '--fuzz', type=str)
+	parser.add_argument('-f', '--fuzz', type=str, help='Find particular AD objects')
 	args = parser.parse_args()
 	
 	#Display help page if no arguments are provided
@@ -331,8 +361,7 @@ def main():
 	
 	if args.no_credentials:
 		args.username = False
-		
-	if args.connect:
+	elif args.connect:
 		args.enumObj = False
 		args.fuzz = False	
 	elif args.enumObj:
@@ -343,7 +372,6 @@ def main():
 	# Regex for invalid domain name or invalid ip address format
 	domainRE = re.compile(r'^((?:[a-zA-Z0-9-.]+)?(?:[a-zA-Z0-9-.]+)?[a-zA-Z0-9-]+\.[a-zA-Z]+)$')
 	domainMatch = domainRE.findall(args.dc)
-
 	ipRE = re.compile(r"^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$")
 	ipaddr = ipRE.findall(args.ip_address)
 	
@@ -357,6 +385,7 @@ def main():
 		
 	titleArt()
 	console.print("[Success] Lumberjack Started", style="success")	
+	#the clock is running!
 	start_time = datetime.now()
 	
 	#Run main features
