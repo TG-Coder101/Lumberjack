@@ -51,7 +51,7 @@ MAX_ATTEMPTS = 2000 # False negative chance: 0.04%
 #Enumeration Class
 class EnumerateAD(object):
 
-	def __init__(self, domainController, ldaps, ldap, no_credentials, verbose, ip_address, connect, enumObj, fuzz, status, username, password):
+	def __init__(self, domainController, ldaps, ldap, no_credentials, verbose, ip_address, connect, enumObj, smb, fuzz, status, username, password):
 		
 		if domainController:
 			self.dc = domainController
@@ -71,6 +71,7 @@ class EnumerateAD(object):
 		self.status = status
 		self.verbose = verbose
 		self.fuzz = fuzz
+		self.smb = smb
 		self.computers = []
 		
 	#check if the credentials have been entered
@@ -222,14 +223,21 @@ class EnumerateAD(object):
 				console.print('[-] Found {0} computers'.format(len(self.conn.entries)), style = "info")
 				print('')
 			
-			enumSMBs = input("[-] Do you want to enumerate SMB shares [Y/n]")
-			if enumSMBs == 'n' or 'N':
-				EnumerateAD.enumerateGroups(self)
-			elif enumSMBs == 'y' or 'Y':
+			if self.smb:
 				self.smbShareCandidates = []
 				self.smbBrowseable = {}
 				self.sortComputers()
 				self.enumSMB()
+			else:
+				try:
+					self.status.update("[bold white]Waiting...")
+					console.print ("[-] Find Groups?", style = "status")
+					input("")
+					EnumerateAD.enumerateGroups(self)
+				except KeyboardInterrupt:
+					self.conn.unbind()
+					console.print ("[-] Warning: Aborted", style = "warning")
+					sys.exit(1)
 					
 		except LDAPException as e:
 			console.print ("[-] Warning: No Computers found", style = "warning")
@@ -629,12 +637,12 @@ def titleArt():
 def main():
 
 	parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
-				 __                    __              _            __
-				/ /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
+			 __                    __              _            __
+			/ /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
 		       / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
 		      / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<
 		     /_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|
-												/___/
+							/___/
 	                       __.                                   By Tom Gardner
 	              ________/o |)
 	             {_______{_rs|
@@ -657,6 +665,7 @@ def main():
 	parser.add_argument('-n', '--netbios', type=str, help='NetBIOS name of Domain Controller')
 	parser.add_argument('-v', '--verbose', action='store_true')
 	parser.add_argument('-e', '--exploit', help='run exploit features: 1 = DC-Sync, 2 = zerologon')
+	parser.add_argument('-smb', '--smb', help='enumerate SMB shares', action='store_true')
 	parser.add_argument('identity' , action='store_true', help='domain\\username:password, attacker account with write access to target computer properties (NetBIOS domain name must be used!)')
 
 	parser.add_argument('-f', '--fuzz', type=str)
@@ -708,7 +717,7 @@ def main():
 	
 	#Run main features
 	try:
-		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.verbose, args.ip_address, args.connect, args.enumerate, args.fuzz, status, args.username, password)
+		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.no_credentials, args.verbose, args.ip_address, args.connect, args.enumerate, args.smb, args.fuzz, status, args.username, password)
 		#zeroLogon = zerologonExploit(args.netbios, args.ip_address, status)
 		enumAD.checks()
 		if args.enumerate is not False:
