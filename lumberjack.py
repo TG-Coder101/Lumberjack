@@ -84,6 +84,7 @@ class EnumerateAD(object):
 	
 	#Connect to domain
 	def connect(self):
+		
 		self.status.update(status="[bold white]Connecting to Active Directory...")
 		try:
 			#Connect through LDAPS (Secure)
@@ -138,6 +139,7 @@ class EnumerateAD(object):
 		
 	#Enumerate Active Directory Users		
 	def enumerateUsers(self):
+		
 		try:			
 			self.status.update("[bold white]Finding Active Directory Users...")
 			sleep(1)
@@ -180,8 +182,9 @@ class EnumerateAD(object):
 
 	#Enumerate Active Directory Computers		
 	def enumComputers(self):
-		computerObjects = []
-		try:			
+		
+		try:	
+			computerObjects = []
 			self.status.update("[bold white]Finding Active Directory Computers...")
 			sleep(1)
 			console.rule("[bold red]Domain Computers")
@@ -223,8 +226,8 @@ class EnumerateAD(object):
 	#Enumerate Active Directory Groups			
 	def enumerateGroups(self):
 		
-		groupobj = []
 		try:
+			groupobj = []
 			self.status.update("[bold white]Finding Active Directory Groups...")
 			sleep(1)
 			console.rule("[bold red]Domain Groups")
@@ -256,8 +259,8 @@ class EnumerateAD(object):
 	#Enumerate Organisational Units
 	def enumerateOUs(self):
 		
-		ouObj = []
 		try:
+			ouObj = []
 			self.status.update("[bold white]Finding Organisational Units...")
 			sleep(1)
 			console.rule("[bold red]Organisational Units")
@@ -288,6 +291,7 @@ class EnumerateAD(object):
 			sys.exit(1)
 
 	def search_admins(self):
+		
 		try:
 			admin_users = []
 			self.status.update("[bold white]Finding Admin Users...")
@@ -324,8 +328,9 @@ class EnumerateAD(object):
 			
 	#Enumerate accounts trusted for delegation (unconstrained delegation)					
 	def unconstrainedDelegation(self):
-		unconstrained = []
+		
 		try:	
+			unconstrained = []
 			self.status.update("[bold white]Finding Users with unconstrained delegation...")
 			sleep(1)
 			console.rule("[bold red]Unconstrained Delegation")
