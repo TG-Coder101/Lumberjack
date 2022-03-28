@@ -84,7 +84,6 @@ class EnumerateAD(object):
 	
 	#Connect to domain
 	def connect(self):
-		
 		self.status.update(status="[bold white]Connecting to Active Directory...")
 		try:
 			#Connect through LDAPS (Secure)
@@ -139,7 +138,7 @@ class EnumerateAD(object):
 		
 	#Enumerate Active Directory Users		
 	def enumerateUsers(self):
-		
+	
 		try:			
 			self.status.update("[bold white]Finding Active Directory Users...")
 			sleep(1)
@@ -182,9 +181,9 @@ class EnumerateAD(object):
 
 	#Enumerate Active Directory Computers		
 	def enumComputers(self):
-		
-		try:	
-			computerObjects = []
+
+		try:		
+			computerObjects = []		
 			self.status.update("[bold white]Finding Active Directory Computers...")
 			sleep(1)
 			console.rule("[bold red]Domain Computers")
@@ -216,8 +215,7 @@ class EnumerateAD(object):
 				except KeyboardInterrupt:
 					self.conn.unbind()
 					console.print ("[-] Warning: Aborted", style = "warning")
-					sys.exit(1)
-					
+					sys.exit(1)	
 		except LDAPException as e:
 			console.print ("[-] Warning: No Computers found", style = "warning")
 			pprint ("Error {}".format(e))
@@ -291,16 +289,16 @@ class EnumerateAD(object):
 			sys.exit(1)
 
 	def search_admins(self):
-		
+	
 		try:
 			admin_users = []
 			self.status.update("[bold white]Finding Admin Users...")
 			sleep(1)
 			console.rule("[bold red]Admin Users")
-			self.conn.search(self.dc_search[:-1], '(&(adminCount=1)(objectclass=person))', attributes=['sAMAccountName', 'objectsid'], size_limit=0)
+			self.conn.search(self.dc_search[:-1], '(&(adminCount=1)(objectclass=person))', attributes=['sAMAccountName'], size_limit=0)
 			for entry in self.conn.entries:
 				name = entry["sAMAccountName"][0]
-				sid = entry["objectSid"][0]
+
 				admin_users.append({
 					"Admin user": name,
 				})
@@ -328,7 +326,7 @@ class EnumerateAD(object):
 			
 	#Enumerate accounts trusted for delegation (unconstrained delegation)					
 	def unconstrainedDelegation(self):
-		
+	
 		try:	
 			unconstrained = []
 			self.status.update("[bold white]Finding Users with unconstrained delegation...")
@@ -352,6 +350,7 @@ class EnumerateAD(object):
 			pprint ("[-] Error: {}".format(e))
 			sys.exit(1)  
 		try:
+			self.status.update("[bold white]Waiting...")
 			console.print ("[-] Enumerate SPNs?", style = "status")
 			input("")
 			EnumerateAD.enumSPNs(self)
@@ -385,6 +384,7 @@ class EnumerateAD(object):
 			pprint ("[-] Error: {}".format(e))
 			sys.exit(1)  
 		try:
+			self.status.update("[bold white]Waiting...")
 			console.print ("[-] Enumerate AS-REP Roastable Users?", style = "status")
 			input("")
 			EnumerateAD.enumKerbPreAuth(self)
@@ -392,10 +392,12 @@ class EnumerateAD(object):
 			self.conn.unbind()
 			console.print ("[-] Warning: Aborted", style = "warning")
 
+	#Enumerate Users that dont require Keberos Pre-Authentication 
 	def enumKerbPreAuth(self):
 		
 		asRepObj = []
 		self.status.update("[bold white]Finding Users that dont require Kerberos Pre-Authentication...")
+		sleep(1)
 		# Build user array
 		users = []
 		console.rule("[bold red]AS-REP Roastable Users")
@@ -416,6 +418,7 @@ class EnumerateAD(object):
 		
 	#Fuzz AD with ANR (Ambiguous Name Resolution)
 	def searchRandom(self, fobject, objectCategory=''):
+	
 		self.status.update("[bold white]Fuzzing Active Directory for: '{}'".format(fobject))
 		#console.print('[-] Found {0} user accounts'.format(len(self.conn.entries)), style = "info")
 		sleep(1)
@@ -562,7 +565,7 @@ class EnumerateAD(object):
 		    with open('{0}-open-smb.json'.format(self.dc), 'w') as f:
 		        json.dump(self.smbBrowseable, f, indent=4, sort_keys=False)
 		    print('[ ' + colored('OK', 'green') + ' ] Wrote browseable shares to {0}-open-smb.json'.format(self.dc))
-		
+    
 def titleArt():
 	f = Figlet(font="slant")
 	cprint(colored(f.renderText('Lumberjack'), 'cyan'))
