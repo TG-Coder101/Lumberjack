@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 try:
-	# Module imports
+	#Module imports
 	import argparse, ldap3, json, re, random, sys, socket, textwrap
 
-	# Other imports
+	#Other imports
 	from binascii import hexlify, unhexlify
 	from datetime import datetime, timedelta
 	from getpass import getpass
@@ -49,22 +49,6 @@ LDAP_BASE_DN = 'DC=hacklabtest,DC=local'
 
 # Give up brute-forcing after 2000 attempts.
 MAX_ATTEMPTS = 2000 # False negative chance: 0.04%
-
-#impacket utils.py
-def parse_credentials(credentials):
-
-	# Regular expression to parse credentials information
-	credential_regex = re.compile(r"(?:(?:([^/:]*)/)?([^:]*)(?::(.*))?)?")
-	""" Helper function to parse credentials information. The expected format is:
-	<DOMAIN></USERNAME><:PASSWORD>
-	:param credentials: credentials to parse
-	:type credentials: string
-	:return: tuple of domain, username and password
-	:rtype: (string, string, string)
-	"""
-	domain, username, password = credential_regex.match(credentials).groups('')
-
-	return domain, username, password
 
 #Connection Class
 class Connect (object):
@@ -139,7 +123,7 @@ class EnumerateAD(object):
 			self.status.update("[bold white]Finding Active Directory Users...")
 			sleep(1)
 			console.rule("[bold red]Domain Users")
-			#Search AD Users (Verbose)
+			#Search AD Users (paged search)
 			if self.large:
 				self.total_entries = 0
 				self.entry_generator = self.conn.extend.standard.paged_search('%s' % (self.root),
@@ -150,6 +134,7 @@ class EnumerateAD(object):
 					pprint(entry)
 				console.print ("[+] Success: Got all domain users ", style = "success")
 				print('')
+			#Search AD Users 
 			else:
 				self.conn.search('%s' % (self.root), search_filter='(objectCategory=person)',
 						 attributes=['sAMAccountName'], 
@@ -160,12 +145,12 @@ class EnumerateAD(object):
 						print(f'[+] {name} \n'),
 					})
 
-				console.print("[+] Success: Got all domain users ", style = "success")
+				console.print("[+] Success: Got all Domain Users ", style = "success")
 				print('')
-				console.print("[-] Found {0} domain users".format(len(self.conn.entries)), style = "info")
+				console.print("[-] Found {0} Domain Users".format(len(self.conn.entries)), style = "info")
 				print('')
 		except LDAPException as e:
-			console.print ("[-] Warning: No Users found", style = "warning")
+			console.print ("[-] Warning: No users found", style = "warning")
 			pprint ("Error {}".format(e))
 			sys.exit(1)
 		try:
@@ -195,9 +180,9 @@ class EnumerateAD(object):
 				})
 				self.computers.append(entry)
 			print('')
-			console.print ("[+] Success: Got all domain computers ", style = "success")
+			console.print ("[+] Success: Got all Domain Computers ", style = "success")
 			print('')
-			console.print('[-] Found {0} computers'.format(len(self.conn.entries)), style = "info")
+			console.print('[-] Found {0} Computers'.format(len(self.conn.entries)), style = "info")
 			print('')
 			if self.smb:
 				self.smbShareCandidates = []
@@ -215,7 +200,7 @@ class EnumerateAD(object):
 					console.print ("[-] Warning: Aborted", style = "warning")
 					sys.exit(1)	
 		except LDAPException as e:
-			console.print ("[-] Warning: No Computers found", style = "warning")
+			console.print ("[-] Warning: No Computers Found", style = "warning")
 			pprint ("Error {}".format(e))
 			sys.exit(1)
 		
@@ -272,7 +257,7 @@ class EnumerateAD(object):
 			console.print('[-] Found {0} OUs'.format(len(self.conn.entries)), style = "info")
 			print('')
 		except LDAPException as e:
-			console.print ("[-] Warning: No OUs found", style = "warning")
+			console.print ("[-] Warning: No OUs Found", style = "warning")
 			pprint ("[-] Error: {}".format(e))
 			sys.exit(1)
 		try:
@@ -301,14 +286,14 @@ class EnumerateAD(object):
 					print(f'[+] {name} \n'),
 				})
 			console.print ("[+] Success: Got all Admins ", style = "success")
-			if len(admin_users) >= 1:
+			if len(admin_users) >= 6:
 				print ('')
-				console.print ("[!] Vulnerability: Domain has too many admin accounts ", style = "error")
+				console.print ("[!] Vulnerability: Domain has too many Admin Accounts ", style = "error")
 			print('')
 			console.print('[-] Found {0} Admins'.format(len(self.conn.entries)), style = "info")
 			print('')
 		except LDAPException as e:
-			console.print ("[-] Warning: No Admins found", style = "warning")
+			console.print ("[-] Warning: No Admins Found", style = "warning")
 			pprint ("[-] Error: {}".format(e))
 			sys.exit(1)
 		try:
@@ -344,11 +329,11 @@ class EnumerateAD(object):
 			else:
 				console.print ("[!] Vulnerability: Possible Attack Vector, can be exploited further.", style = "error")
 			print('')
-			console.print('[-] Found {0} Domain policies'.format(len(self.conn.entries)), style = "info")
+			console.print('[-] Found {0} Domain Policies'.format(len(self.conn.entries)), style = "info")
 			print('')
 
 		except LDAPException as e:
-			console.print ("[-] Warning: No Admins found", style = "warning")
+			console.print ("[-] Warning: No Admins Found", style = "warning")
 			pprint ("[-] Error: {}".format(e))
 			sys.exit(1)
 		try:
@@ -377,12 +362,12 @@ class EnumerateAD(object):
 				})
 			if len(self.conn.entries) >= 1:
 				print('')
-				console.print ("[!] Vulnerability: Domain Vulnerable to unconstrained delegation", style = "error")
+				console.print ("[!] Vulnerability: Domain Vulnerable to Unconstrained Delegation", style = "error")
 				print('')
-			console.print('[-] Found {0} account(s) with unconstrained delegation'.format(len(self.conn.entries)), style = "info")
+			console.print('[-] Found {0} account(s) with Unconstrained Delegation'.format(len(self.conn.entries)), style = "info")
 			print('')
 		except LDAPException as e:   
-			console.print ("[-] Warning: No affected users found", style = "warning")
+			console.print ("[-] Warning: No Affected Users Found", style = "warning")
 			pprint ("[-] Error: {}".format(e))
 			sys.exit(1)  
 		try:
@@ -422,7 +407,7 @@ class EnumerateAD(object):
 				pass
 			
 		except LDAPException as e:   
-			console.print ("[-] Warning: No affected users found", style = "warning")
+			console.print ("[-] Warning: No Affected Users Found", style = "warning")
 			pprint ("[-] Error: {}".format(e))
 			sys.exit(1)  
 		try:
@@ -451,9 +436,9 @@ class EnumerateAD(object):
 			})
 			self.users.append(str(entry['sAMAccountName']) + '@{0}'.format(self.domain))
 		if len(self.conn.entries) >= 1:
-			console.print ("[!] Vulnerability: Domain users vulnerable to AS-REP Roasting", style = "error")
+			console.print ("[!] Vulnerability: Domain Users Vulnerable to AS-REP Roasting", style = "error")
 			print('')
-		console.print('[-] Found {0} account(s) that dont require pre-authentication'.format(len(self.conn.entries)), style = "info")
+		console.print('[-] Found {0} account(s) that Dont Require Kerberos Pre-Authentication'.format(len(self.conn.entries)), style = "info")
 		if self.asrep:
 				ExploitAD.ASREPRoast(self.users, self.domain, self.dc_ip, self.status)
 		else:	
@@ -471,7 +456,7 @@ class EnumerateAD(object):
 			searchFilter = '(anr={})'.format(fobject)
 		try:	
 			self.conn.search('%s' % (self.root), search_filter=searchFilter, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
-			console.print('[-] Found {0} objects'.format(len(self.conn.entries)), style = "info")
+			console.print('[-] Found {0} Objects'.format(len(self.conn.entries)), style = "info")
 			pprint(self.conn.entries) 
 		except LDAPException as e:   
 			console.print ("[-] Warning Nothing found", style = "warning")
@@ -833,7 +818,23 @@ class ExploitAD(object):
 def titleArt():
 	f = Figlet(font="slant")
 	cprint(colored(f.renderText('Lumberjack'), 'cyan'))
+	
+#impacket utils.py
+def parse_credentials(credentials):
 
+	# Regular expression to parse credentials information
+	credential_regex = re.compile(r"(?:(?:([^/:]*)/)?([^:]*)(?::(.*))?)?")
+	""" Helper function to parse credentials information. The expected format is:
+	<DOMAIN></USERNAME><:PASSWORD>
+	:param credentials: credentials to parse
+	:type credentials: string
+	:return: tuple of domain, username and password
+	:rtype: (string, string, string)
+	"""
+	domain, username, password = credential_regex.match(credentials).groups('')
+
+	return domain, username, password
+	
 def main():
 
 	parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
