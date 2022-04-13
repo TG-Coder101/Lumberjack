@@ -1,13 +1,23 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 try:
-	#module imports
+	# Module imports
 	import argparse, ldap3, json, re, random, sys, socket, textwrap
 
-	#other imports
+	# Other imports
 	from binascii import hexlify, unhexlify
 	from datetime import datetime, timedelta
 	from getpass import getpass
+	from ldap3 import SUBTREE, ALL_ATTRIBUTES 
+	from ldap3.core.exceptions import LDAPBindError, LDAPException	
+	from netaddr import *
+	from pprint import pprint
+	from pyasn1.codec.der import decoder, encoder
+	from pyasn1.type.univ import noValue
+	from pyfiglet import Figlet
+	from rich.console import Console, Theme
+	from time import sleep
+	from termcolor import colored, cprint
 
 	# Credit to SecureAuthCorp for GetNPUsers.py and GetUserSPNs
 	from impacket.krb5.kerberosv5 import KerberosError
@@ -26,17 +36,6 @@ try:
 	from impacket.krb5.kerberosv5 import sendReceive, KerberosError
 	from impacket.krb5.types import KerberosTime, Principal
 	
-	from ldap3 import SUBTREE, ALL_ATTRIBUTES 
-	from ldap3.core.exceptions import LDAPBindError, LDAPException	
-	from netaddr import *
-	from pprint import pprint
-	from pyasn1.codec.der import decoder, encoder
-	from pyasn1.type.univ import noValue
-	from pyfiglet import Figlet
-	from rich.console import Console, Theme
-	from time import sleep
-	from termcolor import colored, cprint
-
 except Exception as e:
     	print ("Error {}".format(e))
 
