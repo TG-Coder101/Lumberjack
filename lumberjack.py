@@ -321,7 +321,7 @@ class EnumerateAD(object):
 				MachineAccountQuota = int(str(entry['ms-DS-MachineAccountQuota']))
 				
 				domainpolicies.append({
-					print(f'[+] {name} \n'),
+					print(f'[+] The number of computer accounts that a user is allowed to create in a domain = {name} \n'),
 				})
 			
 			if MachineAccountQuota < 0:
@@ -853,9 +853,7 @@ def main():
    	 '''))
 
 	#Required arguments
-	parser.add_argument('credentials', action='store', help='domain/username[:password]. Valid domain credentials to use for grabbing targetUser\'s PAC \n ')
-	parser.add_argument('-u', '--username', type=str, help='Username of domain user. The username format must be `user@domain.org`')
-	parser.add_argument('-p', '--password', type=str, help='User Password`')
+	parser.add_argument('credentials', action='store', help='domain/username[:password]. Credentials of a valid domain user (FQDN)')
 	parser.add_argument('-h', '--help', help='show this help message and exit', action='help')
 	parser.add_argument('-ip', '--ip_address', type=str, help='ip address of Active Directory')
 	parser.add_argument('-en', '--enumerate', help='Enumerate Active Directory Objects', action='store_true')
