@@ -8,6 +8,8 @@ try:
 	from binascii import hexlify, unhexlify
 	from datetime import datetime, timedelta
 	from getpass import getpass
+
+	# Credit to SecureAuthCorp for GetNPUsers.py and GetUserSPNs
 	from impacket.krb5.kerberosv5 import KerberosError
 	from impacket.krb5.types import Principal
 	from impacket.dcerpc.v5 import nrpc, epm
@@ -23,6 +25,7 @@ try:
 	from impacket.krb5.asn1 import AS_REQ, KERB_PA_PAC_REQUEST, AS_REP, seq_set, seq_set_iter
 	from impacket.krb5.kerberosv5 import sendReceive, KerberosError
 	from impacket.krb5.types import KerberosTime, Principal
+	
 	from ldap3 import SUBTREE, ALL_ATTRIBUTES 
 	from ldap3.core.exceptions import LDAPBindError, LDAPException	
 	from netaddr import *
@@ -671,7 +674,7 @@ class ExploitAD(object):
 			print("[!] Possibly vulnerable to CVE-2021-42287. \n\n[+] Apply Patches")
 			print("<"*3+"-"*51+'>'*3)	
 				
-	#Kerberoasting: From GETUserSPNs.py			
+	#Kerberoasting: From GetUserSPNs.py			
 	def kerberoast(dc_ip, spn, username, password, domain, status):
 		
 		status.update(status="[bold white]Kerberoasting SPN Accounts...")
