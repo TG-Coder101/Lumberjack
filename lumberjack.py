@@ -837,8 +837,8 @@ def titleArt():
 def main():
 
 	parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
-			 	 __                    __              _            __
-				/ /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
+			 __                    __              _            __
+			/ /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
 		       / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
 		      / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<
 		     /_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|
