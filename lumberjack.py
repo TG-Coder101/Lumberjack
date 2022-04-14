@@ -46,6 +46,8 @@ lumberjack.py
 custom_theme = Theme({"success": "cyan", "error": "red", "warning": "yellow", "status": "green", "info": "purple"})
 console = Console(theme=custom_theme)
 
+#To fix Kerberos clock skew: sudo rdate -n x.x.x.x
+
 # Give up brute-forcing after 2000 attempts.
 MAX_ATTEMPTS = 2000 # False negative chance: 0.04%
 
@@ -830,13 +832,13 @@ def parse_credentials(credentials):
 def main():
 
 	parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
-			 __                    __              _            __
-			/ /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
+			 	 __                    __              _            __
+				/ /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
 		       / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
 		      / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<
 		     /_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|
-							/___/
-	                       __.                                  
+												/___/
+	                       __.                                   
 	              ________/o |)
 	             {_______{_rs|
 	        
