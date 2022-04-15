@@ -453,16 +453,6 @@ class EnumerateAD(object):
 			pprint ("[-] Error: {}\n".format(e))
 			sys.exit(1)  
 			
-	def get_user_info(self, samname):
-
-		self.conn.search(self.dc_search[:-1], '(sAMAccountName=%s)' % escape_filter_chars(samname), attributes=['objectSid','ms-DS-MachineAccountQuota'])
-		try:
-			et = self.conn.entries[0]
-			js = et.entry_to_json()
-			return json.loads(js)
-		except IndexError:
-			return False
-	
 	def sortComputers(self):
 
 		for computer in self.computers:
