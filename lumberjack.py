@@ -638,8 +638,7 @@ class ExploitAD(object):
 			console.print( "[-] Not Vulnerable, PAC validated\n")
 		else:
 			console.print("[!] Vulnerability: Possibly vulnerable to CVE-2021-42287. \n\n[+] Apply Patches", style = 'error')
-
-				
+	
 	#Kerberoasting: From GetUserSPNs.py			
 	def kerberoast(dc_ip, spn, username, password, domain, status):
 		
