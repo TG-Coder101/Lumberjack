@@ -1,8 +1,5 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-from os import link
-
-
 try:
 	#Module imports
 	import argparse, dominate, ldap3, json, re, random, sys, socket, textwrap
