@@ -1022,7 +1022,7 @@ def main():
 	if args.report:
 		report(args.report, usr, cmp, g, o, a, spn, ud, asrep, vulns)
 	
-	console.print ("[!] {0} vulnerabilities found in {1}\n".format(vulnsCount, domain), style = 'error')
+	console.print ("[!] Warning: {0} vulnerabilities found in {1}\n".format(vulnsCount, domain), style = 'error')
 		
 	#Exit Lumberjack
 	status.update("[bold white]Exiting Lumberjack...\n")
