@@ -1,5 +1,8 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+from os import link
+
+
 try:
 	#Module imports
 	import argparse, dominate, ldap3, json, re, random, sys, socket, textwrap
@@ -849,7 +852,7 @@ def parse_credentials(credentials):
 #write out to files
 def report(filename, usr, cmp, g, o, a, spn, ud, asrep, vulns):
 
-	table_headers = ['Object']
+	table_headers = ['Active Directory Object']
 
 	doc = dominate.document(title='Lumberjack report')
 
@@ -879,9 +882,68 @@ def report(filename, usr, cmp, g, o, a, spn, ud, asrep, vulns):
 					for i in cmp:
 						with tr():
 							td(i)
-
-							
-	pprint("Generating report called {}.html".format(filename))
+			with table(id='main', cls='table table-striped'):
+				caption(h3('Domain Groups'))
+				with thead():
+					with tr():
+						for table_head in table_headers:
+							th(table_head)
+				with tbody():
+					for i in g:
+						with tr():
+							td(i)
+			with table(id='main', cls='table table-striped'):
+				caption(h3('Organisational Units'))
+				with thead():
+					with tr():
+						for table_head in table_headers:
+							th(table_head)
+				with tbody():
+					for i in o:
+						with tr():
+							td(i)
+			with table(id='main', cls='table table-striped'):
+				caption(h3('Domain Administrators'))
+				with thead():
+					with tr():
+						for table_head in table_headers:
+							th(table_head)
+				with tbody():
+					for i in a:
+						with tr():
+							td(i)
+			with table(id='main', cls='table table-striped'):
+				caption(h3('SPN Accounts'))
+				with thead():
+					with tr():
+						for table_head in table_headers:
+							th(table_head)
+				with tbody():
+					for i in spn:
+						with tr():
+							td(i)
+			with table(id='main', cls='table table-striped'):
+				caption(h3('Users with Unconstrained Delegation'))
+				with thead():
+					with tr():
+						for table_head in table_headers:
+							th(table_head)
+				with tbody():
+					for i in ud:
+						with tr():
+							td(i)
+			with table(id='main', cls='table table-striped'):
+				caption(h3('AS-REP Roastable Users'))
+				with thead():
+					with tr():
+						for table_head in table_headers:
+							th(table_head)
+				with tbody():
+					for i in asrep:
+						with tr():
+							td(i)
+		
+	console.print("[-] Generating report called {}.html\n".format(filename), style = 'status')
 	
 	with open('{}.html'.format(filename), 'w') as f:
 		for d in doc:
