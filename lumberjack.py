@@ -67,10 +67,10 @@ class Connect (object):
 		self.username = username
 		self.password = password
 		self.dc_ip = dc_ip
-		self.server, self.conn = Connect.connect(self, self.dc_ip, self.domain, self.username, self.password)
+		self.server, self.conn = Connect.connect(self, self.dc_ip)
 		
 	#Connect to domain
-	def connect(self, dc_ip, domain, username, password):
+	def connect(self, dc_ip):
 	
 		if dc_ip is not None:
 			self.target = self.dc_ip
@@ -943,7 +943,7 @@ def report(filename, usr, cmp, g, o, a, spn, ud, asrep, vulns):
 						with tr():
 							td(i)
 		
-	console.print("[-] Generating report called {}.html\n".format(filename), style = 'status')
+	console.print("[-] Generating report called {}.html".format(filename), style = 'status')
 	
 	with open('{}.html'.format(filename), 'w') as f:
 		for d in doc:
