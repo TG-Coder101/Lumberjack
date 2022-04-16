@@ -1,8 +1,5 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-from os import link
-
-
 try:
 	#Module imports
 	import argparse, dominate, ldap3, json, re, random, sys, socket, textwrap
@@ -22,6 +19,7 @@ try:
 	from rich.console import Console, Theme
 	from time import sleep
 	from termcolor import colored, cprint
+	from os import link
 
 	# Credit to SecureAuthCorp for GetNPUsers.py and GetUserSPNs
 	from impacket.krb5.kerberosv5 import KerberosError
