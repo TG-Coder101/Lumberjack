@@ -848,7 +848,7 @@ def parse_credentials(credentials):
 	return domain, username, password
 
 #write out to files
-def report(filename, usr, cmp, g, o, a, spn, ud, asrep, vulns):
+def report(filename, usr, cmp, g, o, a, spn, ud, asrep):
 
 	table_headers = ['Active Directory Object']
 
@@ -1077,7 +1077,7 @@ def main():
 	#generate HTML report
 	usr, cmp, g, o, a, spn, ud, asrep, vulnsCount = enumAD.userWrite, enumAD.compWrite, enumAD.groupWrite, enumAD.ouWrite, enumAD.adminWrite, enumAD.spnWrite, enumAD.uncontrainedWrite, enumAD.asrepWrite, enumAD.vulns
 	if args.report:
-		report(args.report, usr, cmp, g, o, a, spn, ud, asrep, vulns)
+		report(args.report, usr, cmp, g, o, a, spn, ud, asrep)
 	
 	console.print ("[!] Warning: {0} vulnerabilities found in {1}\n".format(vulnsCount, domain), style = 'error')
 		
