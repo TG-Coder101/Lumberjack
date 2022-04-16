@@ -1097,3 +1097,5 @@ if __name__ == "__main__":
 			console.print("[+] Success: Finished\n", style="success")	
 		except KeyboardInterrupt:
 			console.print ("[-] Warning: Aborted\n", style= "warning")
+	
+	print('')
