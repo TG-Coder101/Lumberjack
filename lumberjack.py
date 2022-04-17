@@ -87,7 +87,6 @@ class Connect (object):
 			raise LDAPBindError
 		return self.server, self.conn
 	
-	
 #Enumeration Class
 class EnumerateAD(object):
 
@@ -666,8 +665,7 @@ class ExploitAD(object):
 		else:
 			console.print("[!] Vulnerability: Possibly vulnerable to CVE-2021-42287. \n\n[+] Apply Patches", style = 'error')
 			self.vulns +=1
-
-				
+		
 	#Kerberoasting: From GetUserSPNs.py			
 	def kerberoast(dc_ip, spn, username, password, domain, status):
 		
@@ -824,8 +822,7 @@ class ExploitAD(object):
 			console.print('[+] Success: Wrote all hashes to {0}-jtr-hashes\n'.format(domain), style = 'success')
 		else:
 			console.print('[-] Got 0 hashes\n', style = 'info')
-
-		
+	
 #function for lumberjack title art
 def titleArt():
 	f = Figlet(font="slant")
