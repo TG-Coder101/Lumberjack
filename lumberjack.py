@@ -21,7 +21,7 @@ try:
 	from termcolor import colored, cprint
 	from os import link
 
-	# Credit to SecureAuthCorp for GetNPUsers.py and GetUserSPNs
+	# Credit to SecureAuthCorp
 	from impacket.krb5.kerberosv5 import KerberosError
 	from impacket.krb5.types import Principal
 	from impacket.dcerpc.v5 import nrpc, epm
