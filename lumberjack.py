@@ -1024,8 +1024,10 @@ def main():
 	match_re = re.compile(pswdreg)
 	pwdres = re.search(match_re, password)
 	
-	titleArt()
+	console.print("[-] Warning: Do not run this script in a production enviroment\n", style="warning")
 
+	titleArt()
+	
 	console.print("[+] Success: Lumberjack Started\n", style="success")
 	console.print("[-] Input Values", style="info")
 	print(f"Domain : {domain} \nUsername : {username} \nPassword: {password} \nIP Address : {dc_ip}\n")
