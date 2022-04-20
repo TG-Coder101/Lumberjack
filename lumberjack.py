@@ -551,6 +551,8 @@ class ExploitAD(object):
 	"""
 	Check if domain controller is vulnerable to the Zerologon attack aka CVE-2020-1472.
 	Resets the DC account password to an empty string when vulnerable.
+	
+	Credit to Secura
 	"""
 	def try_zero_authenticate(dc_handle, dc_ip, target_computer):
 
