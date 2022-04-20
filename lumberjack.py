@@ -21,7 +21,7 @@ try:
 	from termcolor import colored, cprint
 	from os import link
 
-	# Credit to SecureAuthCorp
+	# Credit to SecureAuthCorp for GetNPUsers.py and GetUserSPNs
 	from impacket.krb5.kerberosv5 import KerberosError
 	from impacket.krb5.types import Principal
 	from impacket.dcerpc.v5 import nrpc, epm
@@ -86,6 +86,7 @@ class Connect (object):
 			console.print ("[-] Error: Failed to connect: {}\n".format(e), style = "error")
 			raise LDAPBindError
 		return self.server, self.conn
+	
 	
 #Enumeration Class
 class EnumerateAD(object):
@@ -550,8 +551,6 @@ class ExploitAD(object):
 	"""
 	Check if domain controller is vulnerable to the Zerologon attack aka CVE-2020-1472.
 	Resets the DC account password to an empty string when vulnerable.
-	
-	Thank you to Secura
 	"""
 	def try_zero_authenticate(dc_handle, dc_ip, target_computer):
 	
@@ -667,7 +666,8 @@ class ExploitAD(object):
 		else:
 			console.print("[!] Vulnerability: Possibly vulnerable to CVE-2021-42287. \n\n[+] Apply Patches", style = 'error')
 			self.vulns +=1
-		
+
+				
 	#Kerberoasting: From GetUserSPNs.py			
 	def kerberoast(dc_ip, spn, username, password, domain, status):
 		
@@ -824,7 +824,8 @@ class ExploitAD(object):
 			console.print('[+] Success: Wrote all hashes to {0}-jtr-hashes\n'.format(domain), style = 'success')
 		else:
 			console.print('[-] Got 0 hashes\n', style = 'info')
-	
+
+		
 #function for lumberjack title art
 def titleArt():
 	f = Figlet(font="slant")
@@ -1026,10 +1027,10 @@ def main():
 	match_re = re.compile(pswdreg)
 	pwdres = re.search(match_re, password)
 	
-	console.print("[-] Warning: Do not run this script in a production enviroment\n", style="warning")
-
-	titleArt()
+	console.print("[-] Warning: Do not run this script in a production enviroment!\n", style="warning")
 	
+	titleArt()
+
 	console.print("[+] Success: Lumberjack Started\n", style="success")
 	console.print("[-] Input Values", style="info")
 	print(f"Domain : {domain} \nUsername : {username} \nPassword: {password} \nIP Address : {dc_ip}\n")
