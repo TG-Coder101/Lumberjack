@@ -615,7 +615,6 @@ class ExploitAD(object):
 			rpc_con = ExploitAD.try_zero_authenticate(dc_handle, dc_ip, target_computer)
 			if rpc_con is None:
 				status.update("[bold white]Performing authentication attempts...\n")
-				sleep(1)
 			else:
 				break
 
