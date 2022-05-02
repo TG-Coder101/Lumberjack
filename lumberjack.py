@@ -19,7 +19,6 @@ try:
 	from rich.console import Console, Theme
 	from time import sleep
 	from termcolor import colored, cprint
-	from os import link
 
 	# Credit to SecureAuthCorp for GetNPUsers.py and GetUserSPNs
 	from impacket.krb5.kerberosv5 import KerberosError
@@ -109,13 +108,9 @@ class EnumerateAD(object):
 
 		#lists
 		self.computers = []
-		self.compWrite = []
 		self.spn = []
 		self.spnWrite = []
 		self.users = []
-		self.userWrite = []
-		self.groupWrite = []
-		self.ouWrite = []
 		self.adminWrite = []
 		self.uncontrainedWrite = []
 		self.asrepWrite = []
@@ -146,7 +141,6 @@ class EnumerateAD(object):
 							size_limit=0)
 				for entry in self.entry_generator:
 					pprint(entry)
-					self.userWrite.append(self.conn.entries)
 				console.print ("[+] Success: Got all domain users\n", style = "success")
 			#Search AD Users
 			else:
@@ -158,7 +152,6 @@ class EnumerateAD(object):
 					userObj.append({
 						print(f'[+] {name} \n'),
 					})
-					self.userWrite.append(name)
 				console.print("[+] Success: Got all Domain Users\n", style = "success")
 				console.print("[-] Found {0} Domain Users\n".format(len(self.conn.entries)), style = "info")
 		except LDAPException as e:
@@ -193,7 +186,6 @@ class EnumerateAD(object):
 					print(f'[+] {name} \n'),
 				})
 				self.computers.append(entry)
-				self.compWrite.append(name)
 			console.print ("[+] Success: Got all Domain Computers\n", style = "success")
 			console.print('[-] Found {0} Computers\n'.format(len(self.conn.entries)), style = "info")
 			if self.smb:
@@ -232,7 +224,6 @@ class EnumerateAD(object):
 				groupobj.append({
 					print(f'[+] {name} \n'),
 				})
-				self.groupWrite.append(name)
 			console.print ("[+] Success: Got all groups\n", style = "success")
 			console.print('[-] Found {0} groups\n'.format(len(self.conn.entries)), style = "info")
 		except LDAPException as e:
@@ -265,7 +256,6 @@ class EnumerateAD(object):
 				ouObj.append({
 					print(f'[+] {name} \n'),
 				})
-				self.ouWrite.append(name)
 			console.print ("[+] Success: Got all OUs\n", style = "success")
 			console.print('[-] Found {0} OUs\n'.format(len(self.conn.entries)), style = "info")
 		except LDAPException as e:
@@ -551,8 +541,6 @@ class ExploitAD(object):
 	"""
 	Check if domain controller is vulnerable to the Zerologon attack aka CVE-2020-1472.
 	Resets the DC account password to an empty string when vulnerable.
-	
-	Credit to Secura
 	"""
 	def try_zero_authenticate(dc_handle, dc_ip, target_computer):
 
@@ -590,7 +578,7 @@ class ExploitAD(object):
 			console.print ("[-] Error {}\n".format(ex), style = "error")
 
 	def try_zerologon(dc_handle, rpc_con, target_computer):
-
+		
 		request = nrpc.NetrServerPasswordSet2()
 		request["PrimaryName"] = dc_handle + "\x00"
 		request["AccountName"] = target_computer + "$\x00"
@@ -845,9 +833,8 @@ def parse_credentials(credentials):
 	domain, username, password = credential_regex.match(credentials).groups('')
 
 	return domain, username, password
-
-#write out to files
-def report(filename, usr, cmp, g, o, a, spn, ud, asrep):
+		
+def report(filename, a, spn, ud, asrep, pwdres):
 
 	table_headers = ['Active Directory Object']
 
@@ -857,96 +844,56 @@ def report(filename, usr, cmp, g, o, a, spn, ud, asrep):
 		link(rel='stylesheet', href='style.css')
 
 	with doc:
+			
 		with div(cls='container'):
 			h1('Lumberjack Report')
+				
 			with table(id='main', cls='table table-striped'):
-				caption(h3('User Accounts'))
-				with thead():
-					with tr():
-						for table_head in table_headers:
-							th(table_head)
-				with tbody():
-					for i in usr:
-						with tr():
-							td(i)
-			with table(id='main', cls='table table-striped'):
-				caption(h3('Client Machines'))
-				with thead():
-					with tr():
-						for table_head in table_headers:
-							th(table_head)
-				with tbody():
-					for i in cmp:
-						with tr():
-							td(i)
-			with table(id='main', cls='table table-striped'):
-				caption(h3('Domain Groups'))
-				with thead():
-					with tr():
-						for table_head in table_headers:
-							th(table_head)
-				with tbody():
-					for i in g:
-						with tr():
-							td(i)
-			with table(id='main', cls='table table-striped'):
-				caption(h3('Organisational Units'))
-				with thead():
-					with tr():
-						for table_head in table_headers:
-							th(table_head)
-				with tbody():
-					for i in o:
-						with tr():
-							td(i)
-			with table(id='main', cls='table table-striped'):
-				caption(h3('Domain Administrators'))
-				with thead():
-					with tr():
-						for table_head in table_headers:
-							th(table_head)
+				caption(h3('Administrators'))
 				with tbody():
 					for i in a:
 						with tr():
 							td(i)
 			with table(id='main', cls='table table-striped'):
 				caption(h3('SPN Accounts'))
-				with thead():
-					with tr():
-						for table_head in table_headers:
-							th(table_head)
 				with tbody():
 					for i in spn:
 						with tr():
 							td(i)
 			with table(id='main', cls='table table-striped'):
-				caption(h3('Users with Unconstrained Delegation'))
-				with thead():
-					with tr():
-						for table_head in table_headers:
-							th(table_head)
+				caption(h3('Users with U.D'))
 				with tbody():
 					for i in ud:
 						with tr():
 							td(i)
 			with table(id='main', cls='table table-striped'):
-				caption(h3('AS-REP Roastable Users'))
-				with thead():
-					with tr():
-						for table_head in table_headers:
-							th(table_head)
+				caption(h3('AS-REP Roastable'))
 				with tbody():
 					for i in asrep:
 						with tr():
 							td(i)
+			br()
+			br()
+			attr(cls='body')
+			h3('Summary of Vulnerabilities', br()) 
+			
+			if a: p('This domain has too many admin accounts. Every additional admin causes linear-to-exponential growth in risk. Every additional admin doesnt just increase their own risk; if theyre compromised, they add to the takedown risk of all the others. Each admin may belong to groups others do not. To fix this vulnerability, shut down all non-essential admin accounts', br())	
+			
+			if spn: p('There are SPN accounts on this domain. These are a nromal feature of Active Directory but if they are misconfigured, such as connected to an admin group, then an attacker can use the Kerberoasting attack to get the hashes and crack them offline. The best way to mitigate this vulnerability is to make sure SPN accounts have strong passwords and arent misconfigured.', br())
+			
+			if ud: p('There are AD objects with unrestricted kerberos delegation. Unconstrained delegation allows a user or computer with the option “Trust This user/computer for delegation to any service” enabled to impersonate ANY user authenticates to it and request access to ANY service. To fix this vulnerability, the admin needs to disable this option', br())	
+		
+			if asrep: p('There are user accounts vulnerable to AS-REP Roasting. This vulnerability is caused by enabling a option called "Do not require Pre-Authentication. If this option is enabled then an attacker can crack password hashes without being authenticated. The best way to mitigate this vulnerabilty is to disable this option.', br())
+			
+			if not pwdres: p('This domain enforces a weak password policy. Weak passwords make it easier for an attacker to brute force. The administrator needs to update their password policy.', br())	
 
-	console.print("[-] Generating report called {}.html".format(filename), style = 'status')
+
+	console.print("[-] Generating {}.html\n".format(filename), style = 'status')
 
 	with open('{}.html'.format(filename), 'w') as f:
 		for d in doc:
-				f.write(str(d) + '\n')
-				print('')
-
+			f.write(str(d) + '\n')
+		
 def main():
 
 	parser = argparse.ArgumentParser(prog='Lumberjack', add_help=False, formatter_class=argparse.RawDescriptionHelpFormatter, description=textwrap.dedent('''
@@ -1030,7 +977,7 @@ def main():
 
 	titleArt()
 
-	console.print("[+] Success: Lumberjack Started\n", style="success")
+	print('')
 	console.print("[-] Input Values", style="info")
 	print(f"Domain : {domain} \nUsername : {username} \nPassword: {password} \nIP Address : {dc_ip}\n")
 	if not pwdres:
@@ -1047,7 +994,7 @@ def main():
 		connectAD = Connect(domain, username, password, dc_ip, status)
 		connectAD.__init__(domain, username, password, dc_ip, status)
 		console.print("[+] Success: Connected to Active Directory through LDAPS\n", style = "success")
-
+		
 	#server and connection to AD
 	s = connectAD.server
 	c = connectAD.conn
@@ -1065,7 +1012,7 @@ def main():
 			console.print ("[-] Enumerate Users?\n", style = "status")
 			input("")
 			enumAD.enumerateUsers()
-		elif args.fuzz is not False:
+		elif args.fuzz:
 			enumAD.searchRandom(args.fuzz)
 
 	except KeyboardInterrupt:
@@ -1076,9 +1023,9 @@ def main():
 	print('')
 
 	#generate HTML report
-	usr, cmp, g, o, a, spn, ud, asrep, vulnsCount = enumAD.userWrite, enumAD.compWrite, enumAD.groupWrite, enumAD.ouWrite, enumAD.adminWrite, enumAD.spnWrite, enumAD.uncontrainedWrite, enumAD.asrepWrite, enumAD.vulns
+	a, spn, ud, asrep, vulnsCount = enumAD.adminWrite, enumAD.spnWrite, enumAD.uncontrainedWrite, enumAD.asrepWrite, enumAD.vulns
 	if args.report:
-		report(args.report, usr, cmp, g, o, a, spn, ud, asrep)
+		report(args.report, a, spn, ud, asrep, pwdres)
 
 	console.print ("[!] Warning: {0} vulnerabilities found in {1}\n".format(vulnsCount, domain), style = 'error')
 
