@@ -35,6 +35,7 @@ Warning: Do not use in a production enviroment as some of the exploits in the sc
 * Kerberoasting
 * AS-REP Roasting
 * CVE-2020-1472 (Zerologon)
+* Automated Reporting
 
 ## Acknowledgments
 * SecureAuthCorp
