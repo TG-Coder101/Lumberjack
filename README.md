@@ -30,13 +30,13 @@ python3 lumberjack.py -h
 
 Warning: Do not use in a production enviroment as some of the exploits in the script can cause severely affect a domain
 
-##Features
+## Features
 *Active Directory Enumeration
 *Kerberoasting
 *AS-REP Roasting
 *CVE-2020-1472 (Zerologon)
 
-##Acknowledgments
+## Acknowledgments
 *SecureAuthCorp
 *Secura
 *CasperGN
