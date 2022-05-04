@@ -12,6 +12,12 @@ This is an automated tool that uses python to identify and exploit vulnerabiliti
 * Python 3.6 or higher
 * See requirements.txt for additional dependencies
 
+### Installation
+Run this command after downloading this repository with git clone
+```
+pip3 install -r requirements.txt
+```
+
 ### Executing program
 ![image](https://user-images.githubusercontent.com/58516757/166748501-9ce29baf-1379-4828-b134-39fa86380367.png)
 
