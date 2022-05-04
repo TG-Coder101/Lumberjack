@@ -447,6 +447,7 @@ class EnumerateAD(object):
 		if len(self.conn.entries) >= 1:
 			console.print ("[!] Vulnerability: Domain Users Vulnerable to AS-REP Roasting\n", style = "error")
 			self.vulns +=1
+		console.print ("[+] Success: Got all SPNs\n", style = "success")	
 		console.print('[-] Found {0} account(s) that Dont Require Kerberos Pre-Authentication\n'.format(len(self.conn.entries)), style = "info")
 		if self.asrep:
 				ExploitAD.ASREPRoast(self.users, self.domain, self.dc_ip, self.status)
@@ -464,8 +465,8 @@ class EnumerateAD(object):
 			searchFilter = '(anr={})'.format(fobject)
 		try:
 			self.conn.search('%s' % (self.root), search_filter=searchFilter, search_scope=SUBTREE, attributes = ALL_ATTRIBUTES, size_limit=0)
-			console.print('[-] Found {0} Objects'.format(len(self.conn.entries)), style = "info")
 			pprint(self.conn.entries)
+			console.print('[-] Found {0} Objects'.format(len(self.conn.entries)), style = "info")
 		except LDAPException as e:
 			console.print ("[-] Warning Nothing found\n", style = "warning")
 			pprint ("[-] Error: {}\n".format(e))
@@ -592,7 +593,9 @@ class ExploitAD(object):
 		return rpc_con.request(request)
 
 	#main function for Zerologon
-	def perform_attack(dc_handle, dc_ip, target_computer):
+	def perform_attack(dc_handle, dc_ip, target_computer, vulns):
+		
+		vulnerability = vulns
 
 		console.rule("[bold red]Zerologon Vulnerability")
 		print('')
@@ -608,10 +611,10 @@ class ExploitAD(object):
 
 		if rpc_con:
 			sleep(1)
-			console.print("[+] Success: Target is vulnerable!\n", style = "success")
-			print('')
+			console.print("[!] Vulnerability: Target is vulnerable to Zerologon exploit!\n", style = "error")
+			vulns +=1
 			status.update("[bold white]Waiting...\n")
-			console.print("[-] Do you want to continue and exploit the Zerologon vulnerability? N/y\n", style = "warning")
+			console.print("[-] Do you want to continue and exploit the Zerologon vulnerability? N/y\n", style = "status")
 			exec_exploit = input().lower()
 			if exec_exploit == "y":
 				status.update("[bold white]Exploiting Zerologon vulnerability...\n")
@@ -732,7 +735,7 @@ class ExploitAD(object):
 			sys.exit(0)
 
 		except KerberosError as err:
-			console.print('[!] Error: Kerberoasting failed with error: {0}\n'.format(err.getErrorString()[1]), style = 'Error')
+			console.print('[!] Error: Kerberoasting failed with error: {0}\n'.format(err.getErrorString()[1]), style = 'error')
 			sys.exit(1)
 
 	#ASREPRoast: From GetNPUsers.py
@@ -917,7 +920,7 @@ def main():
 	parser.add_argument('-ip', '--ip_address', type=str, help='ip address of Active Directory')
 	parser.add_argument('-en', '--enumerate', help='Enumerate Active Directory Objects', action='store_true')
 	parser.add_argument('-n', '--netbios', type=str, help='NetBIOS name of Domain Controller')
-	parser.add_argument('-large', help='For Active Directories with over 1000 users', action='store_true')
+	parser.add_argument('-large', help='For Active Directories with over 1000 objects', action='store_true')
 	parser.add_argument('-e', '--exploit', type=str, help='run exploit features: 1 = zerologon, 2 = NoPac')
 	parser.add_argument('-krb', '--kerberoast', help='Run Kerberoasting', action='store_true')
 	parser.add_argument('-asrep', help='AS-REP Roasting', action='store_true')
@@ -989,7 +992,7 @@ def main():
 
 	if args.exploit == '1':
 		dc_name = args.netbios.rstrip("$")
-		ExploitAD.perform_attack("\\\\" + dc_name, dc_ip, dc_name)
+		ExploitAD.perform_attack("\\\\" + dc_name, dc_ip, dc_name, vulns)
 	if args.exploit != '1':
 		connectAD = Connect(domain, username, password, dc_ip, status)
 		connectAD.__init__(domain, username, password, dc_ip, status)
@@ -1018,7 +1021,7 @@ def main():
 	except KeyboardInterrupt:
 		console.print ("[-] Warning: Aborting\n", style = "warning")
 
-	console.rule("[bold red]")
+	console.rule("[bold red]Summary")
 	print('')
 	print('')
 
