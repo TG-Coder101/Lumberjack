@@ -31,12 +31,12 @@ python3 lumberjack.py -h
 Warning: Do not use in a production enviroment as some of the exploits in the script can cause severely affect a domain
 
 ## Features
-*Active Directory Enumeration
-*Kerberoasting
-*AS-REP Roasting
-*CVE-2020-1472 (Zerologon)
+* Active Directory Enumeration
+* Kerberoasting
+* AS-REP Roasting
+* CVE-2020-1472 (Zerologon)
 
 ## Acknowledgments
-*SecureAuthCorp
-*Secura
-*CasperGN
+* SecureAuthCorp
+* Secura
+* CasperGN
