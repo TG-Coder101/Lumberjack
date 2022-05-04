@@ -1,0 +1,8 @@
+impacket==0.9.24
+dominate==2.6.0
+ldap3==2.8.1
+netaddr==0.7.19
+pyasn1==0.4.8
+rich==11.2.0
+termcolor==1.1.0
+pyfiglet==0.8.post0
