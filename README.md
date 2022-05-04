@@ -19,6 +19,11 @@ pip3 install -r requirements.txt
 ```
 
 ### Executing program
+Run this command to view help page
+```
+python3 lumberjack.py -h
+```
+
 ![image](https://user-images.githubusercontent.com/58516757/166748501-9ce29baf-1379-4828-b134-39fa86380367.png)
 
 ![image](https://user-images.githubusercontent.com/58516757/166748552-c74f18a8-f0e8-4cd6-be12-9446bdb500cf.png)
