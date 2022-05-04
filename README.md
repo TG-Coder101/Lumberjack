@@ -16,3 +16,5 @@ This is an automated tool that uses python to identify and exploit vulnerabiliti
 ![image](https://user-images.githubusercontent.com/58516757/166748501-9ce29baf-1379-4828-b134-39fa86380367.png)
 
 ![image](https://user-images.githubusercontent.com/58516757/166748552-c74f18a8-f0e8-4cd6-be12-9446bdb500cf.png)
+
+Warning: Do not use in a production enviroment as some of the exploits in the script can cause severely affect a domain
