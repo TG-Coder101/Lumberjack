@@ -840,7 +840,7 @@ def parse_credentials(credentials):
 
 	return domain, username, password
 		
-def report(filename, a, spn, ud, asrep, pwdres, vulns):
+def report(filename, a, spn, ud, asrep, pwdres, vulns, domain):
 
 	table_headers = ['Active Directory Object']
 	doc = dominate.document(title='Lumberjack report')
@@ -853,7 +853,7 @@ def report(filename, a, spn, ud, asrep, pwdres, vulns):
 	with doc:
 			
 		with div(cls='container'):
-			h1('Lumberjack Vulnerability Report', br())
+			h1('Vulnerability Report for: ', domain, br())
 			h3('Date of report: ', d1)
 			h4('Number of Vulnerabilities: ', vulns, br())
 			
@@ -1036,7 +1036,7 @@ def main():
 	#generate HTML report
 	a, spn, ud, asrep, vulnsCount = enumAD.adminWrite, enumAD.spnWrite, enumAD.uncontrainedWrite, enumAD.asrepWrite, enumAD.vulns
 	if args.report:
-		report(args.report, a, spn, ud, asrep, pwdres, vulnsCount)
+		report(args.report, a, spn, ud, asrep, pwdres, vulnsCount, domain)
 
 	console.print ("[!] Warning: {0} vulnerabilities found in {1}\n".format(vulnsCount, domain), style = 'error')
 
