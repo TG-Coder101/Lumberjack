@@ -6,7 +6,7 @@ try:
 
 	#Other imports
 	from binascii import hexlify, unhexlify
-	from datetime import datetime, timedelta
+	from datetime import datetime, timedelta, date
 	from dominate.tags import *
 	from getpass import getpass
 	from ldap3 import SUBTREE, ALL_ATTRIBUTES
@@ -313,7 +313,7 @@ class EnumerateAD(object):
 
 		try:
 			domainpolicies = []
-			self.status.update("[bold white]Finding domain policies...\n")
+			self.status.update("[bold white]Finding Domain Policies...\n")
 			sleep(1)
 			console.rule("[bold red]Domain Policies")
 			print('')
@@ -447,7 +447,7 @@ class EnumerateAD(object):
 		if len(self.conn.entries) >= 1:
 			console.print ("[!] Vulnerability: Domain Users Vulnerable to AS-REP Roasting\n", style = "error")
 			self.vulns +=1
-		console.print ("[+] Success: Got all SPNs\n", style = "success")	
+		console.print ("[+] Success: Got all AS-Rep Roastable Users\n", style = "success")	
 		console.print('[-] Found {0} account(s) that Dont Require Kerberos Pre-Authentication\n'.format(len(self.conn.entries)), style = "info")
 		if self.asrep:
 				ExploitAD.ASREPRoast(self.users, self.domain, self.dc_ip, self.status)
@@ -596,6 +596,7 @@ class ExploitAD(object):
 	def perform_attack(dc_handle, dc_ip, target_computer, vulns):
 		
 		vulnerability = vulns
+		zeroWrite = 0
 
 		console.rule("[bold red]Zerologon Vulnerability")
 		print('')
@@ -612,11 +613,12 @@ class ExploitAD(object):
 		if rpc_con:
 			sleep(1)
 			console.print("[!] Vulnerability: Target is vulnerable to Zerologon exploit!\n", style = "error")
-			vulns +=1
+			vulnerability +=1
+			zeroWrite = 1
 			status.update("[bold white]Waiting...\n")
 			console.print("[-] Do you want to continue and exploit the Zerologon vulnerability? N/y\n", style = "status")
 			exec_exploit = input().lower()
-			if exec_exploit == "y":
+			if exec_exploit == "y" or "Y":
 				status.update("[bold white]Exploiting Zerologon vulnerability...\n")
 				result = ExploitAD.try_zerologon(dc_handle, rpc_con, target_computer)
 				if result["ErrorCode"] == 0:
@@ -624,6 +626,7 @@ class ExploitAD(object):
 					console.print("[+] Success: Exploit completed! Domain Controller's account password has been set to an empty string\n", style = "success")
 				else:
 					console.print("[-] Warning: Non-zero return code, something went wrong. Domain Controller returned: {}\n".format(result["ErrorCode"]), style = "warning")
+					sys.exit(1)
 			else:
 				console.print("[-] Aborted\n", style = "warning")
 				sys.exit(0)
@@ -837,11 +840,12 @@ def parse_credentials(credentials):
 
 	return domain, username, password
 		
-def report(filename, a, spn, ud, asrep, pwdres):
+def report(filename, a, spn, ud, asrep, pwdres, vulns):
 
 	table_headers = ['Active Directory Object']
-
 	doc = dominate.document(title='Lumberjack report')
+	today = date.today()
+	d1 = today.strftime("%d/%m/%y")
 
 	with doc.head:
 		link(rel='stylesheet', href='style.css')
@@ -849,47 +853,49 @@ def report(filename, a, spn, ud, asrep, pwdres):
 	with doc:
 			
 		with div(cls='container'):
-			h1('Lumberjack Report')
-				
+			h1('Lumberjack Vulnerability Report', br())
+			h3('Date of report: ', d1)
+			h4('Number of Vulnerabilities: ', vulns, br())
+			
+			attr(cls='body')
+			h3('Summary of Vulnerabilities', br()) 
+			
+			if a: p('This domain has too many admin accounts. Every additional admin causes linear-to-exponential growth in risk. Every additional admin doesnt just increase their own risk; if theyre compromised, they add to the takedown risk of all the others. Each admin may belong to groups others do not. To fix this vulnerability the admin needs to disable all non-essential admin accounts', br(),'Applies to: Windows Server 2022, Windows Server 2019, Windows Server 2016, Windows Server 2012 R2, Windows Server 2012',br(), 'View more at: https://docs.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/implementing-least-privilege-administrative-models')	
+			
+			if spn: p('There are SPN accounts on this domain. These are a normal feature of Active Directory but if they are misconfigured, such as connected to an admin group, then an attacker can use the Kerberoasting attack to get the hashes and crack them offline. The best way to mitigate this vulnerability is to make sure SPN accounts have strong passwords and arent misconfigured.', br())
+			
+			if ud: p('There are AD objects with unrestricted kerberos delegation. Unconstrained delegation allows a user or computer with the option “Trust This user/computer for delegation to any service” enabled to impersonate ANY user authenticates to it and request access to ANY service. To fix this vulnerability, the admin needs to disable this option', br(), 'Applies to: Windows Server 2022, Windows Server 2019, Windows Server 2016, Windows Server 2012 R2, Windows Server 2012', br(), 'View more at: https://docs.microsoft.com/en-us/defender-for-identity/cas-isp-unconstrained-kerberos', br())	
+		
+			if asrep: p('There are user accounts vulnerable to AS-REP Roasting. This vulnerability is caused by enabling a option called "Do not require Pre-Authentication. If this option is enabled then an attacker can crack password hashes without being authenticated. The best way to mitigate this vulnerabilty is to disable this option.', br(), 'View more at: https://stealthbits.com/blog/cracking-active-directory-passwords-with-as-rep-roasting/')
+			
+			if not pwdres: p('This domain enforces a weak password policy. Weak passwords make it easier for an attacker to brute force. The administrator needs to update their password policy.',br(), 'View more at: https://www.netwrix.com/password_best_practice.html', br())	
+			br()
+
+			h3('Vulnerable domain objects') 
 			with table(id='main', cls='table table-striped'):
-				caption(h3('Administrators'))
+				caption(h4('Administrators'))
 				with tbody():
 					for i in a:
 						with tr():
 							td(i)
 			with table(id='main', cls='table table-striped'):
-				caption(h3('SPN Accounts'))
+				caption(h4('SPN Accounts'))
 				with tbody():
 					for i in spn:
 						with tr():
 							td(i)
 			with table(id='main', cls='table table-striped'):
-				caption(h3('Users with U.D'))
+				caption(h4('Users with U.D'))
 				with tbody():
 					for i in ud:
 						with tr():
 							td(i)
 			with table(id='main', cls='table table-striped'):
-				caption(h3('AS-REP Roastable'))
+				caption(h4('AS-REP Roastable'))
 				with tbody():
 					for i in asrep:
 						with tr():
 							td(i)
-			br()
-			br()
-			attr(cls='body')
-			h3('Summary of Vulnerabilities', br()) 
-			
-			if a: p('This domain has too many admin accounts. Every additional admin causes linear-to-exponential growth in risk. Every additional admin doesnt just increase their own risk; if theyre compromised, they add to the takedown risk of all the others. Each admin may belong to groups others do not. To fix this vulnerability, shut down all non-essential admin accounts', br())	
-			
-			if spn: p('There are SPN accounts on this domain. These are a nromal feature of Active Directory but if they are misconfigured, such as connected to an admin group, then an attacker can use the Kerberoasting attack to get the hashes and crack them offline. The best way to mitigate this vulnerability is to make sure SPN accounts have strong passwords and arent misconfigured.', br())
-			
-			if ud: p('There are AD objects with unrestricted kerberos delegation. Unconstrained delegation allows a user or computer with the option “Trust This user/computer for delegation to any service” enabled to impersonate ANY user authenticates to it and request access to ANY service. To fix this vulnerability, the admin needs to disable this option', br())	
-		
-			if asrep: p('There are user accounts vulnerable to AS-REP Roasting. This vulnerability is caused by enabling a option called "Do not require Pre-Authentication. If this option is enabled then an attacker can crack password hashes without being authenticated. The best way to mitigate this vulnerabilty is to disable this option.', br())
-			
-			if not pwdres: p('This domain enforces a weak password policy. Weak passwords make it easier for an attacker to brute force. The administrator needs to update their password policy.', br())	
-
 
 	console.print("[-] Generating {}.html\n".format(filename), style = 'status')
 
@@ -910,8 +916,11 @@ def main():
 	              ________/o |)
 	             {_______{_rs|
 
-       A Prototype Active Directory Vulnerability Identification, Exploitation, & Reporting Tool
-    |*------------------------------------------------------------------------------------------*|
+           An Active Directory Vulnerability Identification, Exploitation, & Reporting Tool
+      |*-------------------------------------------------------------------------------------*|
+      
+      	Usage: python3 lumberjack.py [Domain + Credentials] [IP Address] [Arguments] 
+      	Example: python3 lumberjack.py TESTLAB/TestUser:Password1 -ip 192.168.24.100 -en 
    	 '''))
 
 	#Required arguments
@@ -926,7 +935,7 @@ def main():
 	parser.add_argument('-asrep', help='AS-REP Roasting', action='store_true')
 	parser.add_argument('-smb', '--smb', help='enumerate SMB shares', action='store_true')
 	parser.add_argument('-f', '--fuzz', type=str)
-	parser.add_argument('--report', type=str, help='Create HTML Report')
+	parser.add_argument('-report', type=str, help='Create HTML Report')
 	args = parser.parse_args()
 
 	#split credentials into their three components: name of DC, username, and the password
@@ -989,19 +998,18 @@ def main():
 
 	#The clock is running!
 	start_time = datetime.now()
-
-	if args.exploit == '1':
-		dc_name = args.netbios.rstrip("$")
-		ExploitAD.perform_attack("\\\\" + dc_name, dc_ip, dc_name, vulns)
+	
 	if args.exploit != '1':
 		connectAD = Connect(domain, username, password, dc_ip, status)
 		connectAD.__init__(domain, username, password, dc_ip, status)
 		console.print("[+] Success: Connected to Active Directory through LDAPS\n", style = "success")
-		
-	#server and connection to AD
-	s = connectAD.server
-	c = connectAD.conn
-
+		#server and connection to AD
+		s = connectAD.server
+		c = connectAD.conn
+	
+	if args.exploit == '1':
+		dc_name = args.netbios.rstrip("$")
+		ExploitAD.perform_attack("\\\\" + dc_name, dc_ip, dc_name, vulns)
 	if args.exploit == '2':
 		args.enumerate = False
 		args.fuzz = False
@@ -1024,11 +1032,11 @@ def main():
 	console.rule("[bold red]Summary")
 	print('')
 	print('')
-
+	
 	#generate HTML report
 	a, spn, ud, asrep, vulnsCount = enumAD.adminWrite, enumAD.spnWrite, enumAD.uncontrainedWrite, enumAD.asrepWrite, enumAD.vulns
 	if args.report:
-		report(args.report, a, spn, ud, asrep, pwdres)
+		report(args.report, a, spn, ud, asrep, pwdres, vulnsCount)
 
 	console.print ("[!] Warning: {0} vulnerabilities found in {1}\n".format(vulnsCount, domain), style = 'error')
 
