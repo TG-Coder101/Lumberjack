@@ -28,7 +28,7 @@ python3 lumberjack.py -h
 
 ![image](https://user-images.githubusercontent.com/58516757/166748552-c74f18a8-f0e8-4cd6-be12-9446bdb500cf.png)
 
-Warning: Do not use in a production enviroment as some of the exploits in the script can cause severely affect a domain
+Warning: Do not use in a production environment as some of the exploits in the script can cause severely affect a domain
 
 ## Features
 * Active Directory Enumeration
